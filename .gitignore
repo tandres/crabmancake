@@ -1,2 +1,4 @@
+!.github/
+/web-deploy
 /target
 Cargo.lock
