@@ -1,0 +1,24 @@
+[package]
+name = "crabmancake"
+version = "0.1.0"
+authors = ["Trenton Andres <trenton.andres@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+log = "0.4"
+console_log = "0.1"
+console_error_panic_hook = "0.1"
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+  'Document',
+  'Element',
+  'HtmlElement',
+  'Node',
+  'Window',
+]
