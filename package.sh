@@ -9,5 +9,6 @@ else
 fi
 
 cp index.html ${WEBDIR}/index.html
+cp index.js ${WEBDIR}/index.js
 
 cp -r pkg ${WEBDIR}/pkg
