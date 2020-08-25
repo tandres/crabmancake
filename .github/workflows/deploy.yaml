@@ -1,0 +1,29 @@
+name: 'Deploy-gh-pages'
+
+on:
+  push:
+    branches:
+    - master
+
+jobs:
+  deploy:
+    name: 'Deploy-gh-pages'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: build
+      uses: docker://trentonandres/rust-wasm-builder
+      with:
+        args: wasm-pack build --target web --dev --
+    - name: package
+      run: |
+        ./package.sh
+
+    - name: deploy
+      env:
+        ACCESS_TOKEN: ${{secrets.ACCESS_TOKEN}}
+      run: |
+        ./deploy.sh
+
