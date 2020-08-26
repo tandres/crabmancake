@@ -11,9 +11,10 @@ crate-type = ["cdylib"]
 console_log = "0.1"
 console_error_panic_hook = "0.1"
 git-version = "0.3"
-log = "0.4"
-wasm-bindgen = "0.2"
 js-sys = "0.3"
+log = "0.4"
+thiserror = "1.0.20"
+wasm-bindgen = "0.2"
 
 [dependencies.web-sys]
 version = "0.3"
