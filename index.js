@@ -1,8 +1,11 @@
 const rust = import('./pkg/crabmancake.js');
-rust
-    .then(m => {
-        m.default();
-        console.log("Hello from javascript");
-    })
-    .catch(console.error);
 
+async function crab() {
+    let m = await rust;
+    let l = await m.default()
+    let cmc_client = m.CmcClient.new();
+    console.log("Hello from javascript");
+    cmc_client.say_hello();
+}
+
+crab().catch(console.error);
