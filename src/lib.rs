@@ -16,6 +16,7 @@ pub struct CmcClient {
 
 #[wasm_bindgen]
 impl CmcClient {
+    #[wasm_bindgen(constructor)]
     pub fn new() -> Result<CmcClient, JsValue> {
         main()
     }
