@@ -18,7 +18,13 @@ pub struct CmcClient {
 impl CmcClient {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Result<CmcClient, JsValue> {
-        main()
+        let window = web_sys::window().expect("no global `window` exists");
+        let document: Document = window.document().expect("should have a document on window");
+        let gl = setup_gl_context(&document)?;
+        draw_something(&gl)?;
+        Ok(CmcClient {
+            _web_gl: gl
+        })
     }
 
     pub fn say_hello(&self) {
@@ -26,18 +32,11 @@ impl CmcClient {
     }
 }
 
-pub fn main() -> Result<CmcClient, JsValue> {
+#[wasm_bindgen]
+pub fn cmc_init() {
     console_log::init_with_level(log::Level::Trace).unwrap();
     console_error_panic_hook::set_once();
-
-    trace!("Info: {}", GIT_VERSION);
-    let window = web_sys::window().expect("no global `window` exists");
-    let document: Document = window.document().expect("should have a document on window");
-    let gl = setup_gl_context(&document)?;
-    draw_something(&gl)?;
-    Ok(CmcClient {
-        _web_gl: gl
-    })
+    trace!("Info:\n Git version: {}", GIT_VERSION);
 }
 
 fn setup_gl_context(doc: &Document) -> Result<web_sys::WebGlRenderingContext, JsValue> {
