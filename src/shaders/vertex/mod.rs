@@ -3,6 +3,6 @@ pub const SHADER: &str = r#"
     uniform mat4 uTransform;
 
     void main() {
-        gl_position = uTransform * aPosition;
+        gl_Position = uTransform * aPosition;
     }
 "#;

@@ -8,6 +8,14 @@ pub type CmcResult<T> = Result<T, CmcError>;
 pub enum CmcError {
     #[error("Missing value: {0}")]
     MissingVal(String),
+    #[error("Shader compilation failure: {log}")]
+    ShaderCompile {
+        log: String
+    },
+    #[error("GL Program Link Failure: {log}")]
+    ShaderLink {
+        log: String
+    },
 }
 
 impl CmcError {

@@ -8,10 +8,14 @@ use web_sys::{Document, HtmlCanvasElement, WebGlRenderingContext as WebGL};
 const GIT_VERSION: &str = git_version::git_version!();
 
 mod error;
+mod render;
+mod shaders;
+mod state;
 
 #[wasm_bindgen]
 pub struct CmcClient {
-    _web_gl: WebGL,
+    web_gl: WebGL,
+    renderer: render::Renderer,
 }
 
 #[wasm_bindgen]
@@ -21,16 +25,40 @@ impl CmcClient {
         let window = web_sys::window().expect("no global `window` exists");
         let document: Document = window.document().expect("should have a document on window");
         let gl = setup_gl_context(&document)?;
-        draw_something(&gl)?;
+        let renderer = render::Renderer::new(&gl)?;
         Ok(CmcClient {
-            _web_gl: gl
+            web_gl: gl,
+            renderer
         })
     }
 
     pub fn say_hello(&self) {
         info!("Hello from wasm-rust!");
     }
+
+    pub fn update(&mut self, time: f32, height: f32, width: f32) -> Result<(), JsValue> {
+        state::update(time, height, width);
+        Ok(())
+    }
+
+    pub fn render(&self) {
+        trace!("Render called");
+        let state = state::get_curr();
+
+        self.web_gl.clear(WebGL::COLOR_BUFFER_BIT | WebGL::DEPTH_BUFFER_BIT);
+
+        self.renderer.render(
+            &self.web_gl,
+            state.control_bottom,
+            state.control_top,
+            state.control_left,
+            state.control_right,
+            state.canvas_height,
+            state.canvas_width,
+            );
+    }
 }
+
 
 #[wasm_bindgen]
 pub fn cmc_init() {
@@ -50,7 +78,4 @@ fn setup_gl_context(doc: &Document) -> Result<web_sys::WebGlRenderingContext, Js
     Ok(context)
 }
 
-fn draw_something(gl: &web_sys::WebGlRenderingContext) -> Result<(), JsValue> {
-    gl.clear(WebGL::COLOR_BUFFER_BIT | WebGL::DEPTH_BUFFER_BIT);
-    Ok(())
-}
+
