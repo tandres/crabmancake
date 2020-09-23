@@ -10,11 +10,16 @@ pub enum CmcError {
     MissingVal(String),
     #[error("Shader compilation failure: {log}")]
     ShaderCompile {
-        log: String
+        log: String,
     },
     #[error("GL Program Link Failure: {log}")]
     ShaderLink {
-        log: String
+        log: String,
+    },
+    #[error("JsValue Error: {description}")]
+    JsValue {
+        jsvalue: JsValue,
+        description: String,
     },
 }
 
@@ -28,5 +33,14 @@ impl From<CmcError> for JsValue {
     fn from(val: CmcError) -> Self {
         let msg = format!("{}", val);
         JsValue::from_str(&msg[..])
+    }
+}
+
+impl From<JsValue> for CmcError {
+    fn from(val: JsValue) -> Self {
+        CmcError::JsValue {
+            jsvalue: val,
+            description: String::from("You should have figured this out"),
+        }
     }
 }

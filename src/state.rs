@@ -6,7 +6,7 @@ lazy_static! {
     static ref APP_STATE: Mutex<Arc<AppState>> = Mutex::new(Arc::new(AppState::new()));
 }
 
-pub fn update(time: f32, canvas_height: f32, canvas_width: f32) {
+pub fn update(time: f32, canvas_height: f32, canvas_width: f32) -> f32 {
     let min_height_width = canvas_height.min(canvas_width);
     let display_size = 0.9 * min_height_width;
     let half_display_size = display_size / 2.;
@@ -14,6 +14,7 @@ pub fn update(time: f32, canvas_height: f32, canvas_width: f32) {
     let half_canvas_width = canvas_width / 2.;
 
     let mut data = APP_STATE.lock().unwrap();
+    let delta_t = time - data.time;
 
     *data = Arc::new(AppState {
         canvas_height: canvas_height,
@@ -27,6 +28,7 @@ pub fn update(time: f32, canvas_height: f32, canvas_width: f32) {
         time: time,
         ..*data.clone()
     });
+    delta_t
 }
 
 pub fn get_curr() -> Arc<AppState> {
