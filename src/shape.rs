@@ -1,4 +1,5 @@
 use crate::{render::Renderer, entity::Entity};
+use nalgebra::{Isometry3, Perspective3};
 use web_sys::WebGlRenderingContext;
 use std::rc::Rc;
 
@@ -14,7 +15,6 @@ where
     pub entity: Entity,
 }
 
-
 impl<R> Shape<R>
 where
     R: Renderer,
@@ -23,7 +23,9 @@ where
         Self { renderer, entity }
     }
 
-    pub fn render(&self, gl: &WebGlRenderingContext, canvas_height: f32, canvas_width: f32) {
-        self.renderer.render(gl, canvas_height, canvas_width, &self.entity.location, &self.entity.rotation)
+    pub fn render(&self, gl: &WebGlRenderingContext, view: &Isometry3<f32>, projection: &Perspective3<f32>) {
+        self.renderer.render(gl, view, projection, &self.entity.location, &self.entity.rotation)
     }
+
+
 }

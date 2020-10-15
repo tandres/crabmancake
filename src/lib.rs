@@ -1,10 +1,11 @@
-use crate::{entity::Entity, shape::Shape, error::CmcError, render::SimpleRenderer};
+use crate::{entity::Entity, shape::Shape, error::CmcError, render::{RenderCache, ShapeRenderer}};
 use log::{info, trace};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, HtmlCanvasElement, WebGlRenderingContext as WebGL};
-use std::rc::Rc;
+use nalgebra::{Isometry3, Perspective3, Point3, Vector3};
+use include_dir::{include_dir, Dir};
 
 const GIT_VERSION: &str = git_version::git_version!();
 
@@ -12,14 +13,17 @@ mod common;
 mod entity;
 mod error;
 mod render;
-mod shaders;
 mod shape;
 mod state;
+
+const MODEL_DIR: Dir = include_dir!("models/");
 
 #[wasm_bindgen]
 pub struct CmcClient {
     web_gl: WebGL,
-    shapes: Vec<Shape<SimpleRenderer>>,
+    #[allow(dead_code)]
+    rendercache: RenderCache,
+    shapes: Vec<Shape<ShapeRenderer>>,
 }
 
 #[wasm_bindgen]
@@ -29,13 +33,17 @@ impl CmcClient {
         let window = web_sys::window().expect("no global `window` exists");
         let document: Document = window.document().expect("should have a document on window");
         let gl = setup_gl_context(&document)?;
-        let renderer = Rc::new(SimpleRenderer::new(&gl)?);
+        let rendercache = render::build_rendercache(&gl, &MODEL_DIR).expect("Failed to create rendercache");
+        let mut shapes = Vec::new();
         let mut entity = Entity::new_stationary();
         entity::set_rot_rate(&mut entity, nalgebra::Vector3::z());
-        let shape = Shape::new(renderer.clone(), entity);
+        let cube_renderer = rendercache.get_shaperenderer("Cube").expect("Failed to get renderer");
+        let shape = Shape::new(cube_renderer, entity);
+        shapes.push(shape);
         let client = CmcClient {
             web_gl: gl,
-            shapes: vec![shape],
+            rendercache,
+            shapes,
         };
         Ok(client)
     }
@@ -58,7 +66,17 @@ impl CmcClient {
 
         self.web_gl.clear(WebGL::COLOR_BUFFER_BIT | WebGL::DEPTH_BUFFER_BIT);
         for shape in self.shapes.iter() {
-            shape.render(&self.web_gl, state.canvas_height, state.canvas_width)
+            let aspect: f32 = state.canvas_width / state.canvas_height;
+            pub const FIELD_OF_VIEW: f32 = 45. * std::f32::consts::PI / 180.; //in radians
+            pub const Z_FAR: f32 = 1000.;
+            pub const Z_NEAR: f32 = 1.0;
+            let eye    = Point3::new(0.0, 0.0, 3.0);
+            let target = Point3::new(0.0, 0.0, 1.0);
+            let view   = Isometry3::look_at_rh(&eye, &target, &Vector3::y());
+
+            let projection = Perspective3::new(aspect, FIELD_OF_VIEW, Z_NEAR, Z_FAR);
+
+            shape.render(&self.web_gl, &view, &projection)
         }
     }
 }

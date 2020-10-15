@@ -1,11 +1,33 @@
-use crate::{common::compile_shader, error::{CmcError, CmcResult}};
+use crate::error::{CmcError, CmcResult};
+use super::{Renderer, common::build_program};
 use js_sys::WebAssembly;
-use nalgebra::{Isometry3, Perspective3, Point3, Vector3};
+use nalgebra::{Isometry3, Perspective3, Vector3};
 use wasm_bindgen::JsCast;
 use web_sys::WebGlRenderingContext as WebGL;
 use web_sys::*;
 
-pub struct SimpleRenderer {
+const VERT_SHADER: &str = r#"
+    attribute vec4 aPosition;
+    uniform mat4 uTransform;
+
+    void main() {
+        gl_Position = uTransform * aPosition;
+    }
+"#;
+
+const FRAG_SHADER: &str = r#"
+    precision mediump float;
+
+    uniform vec4 uColor;
+    uniform float uOpacity;
+
+    void main() {
+        gl_FragColor = vec4(uColor.r, uColor.g, uColor.b, uColor.a * uOpacity);
+    }
+"#;
+
+pub struct ShapeRenderer {
+    pub name: String,
     program: WebGlProgram,
     rect_vertice_buffer: WebGlBuffer,
     index_buffer: WebGlBuffer,
@@ -15,32 +37,12 @@ pub struct SimpleRenderer {
     u_transform: WebGlUniformLocation,
 }
 
-impl SimpleRenderer {
-    pub fn new(gl: &WebGlRenderingContext) -> CmcResult<Self> {
-        let program = gl.create_program().ok_or(CmcError::missing_val("create program"))?;
-        let vert_shader = compile_shader(&gl, WebGL::VERTEX_SHADER, crate::shaders::vertex::SHADER)?;
-        let frag_shader = compile_shader(&gl, WebGL::FRAGMENT_SHADER, crate::shaders::fragment::SHADER)?;
+impl ShapeRenderer {
+    pub fn new(name: &String, gl: &WebGlRenderingContext, vertices: Vec<f32>, indices: Vec<u16>, normals: Vec<f32>) -> CmcResult<Self> {
+        let program = build_program(gl, VERT_SHADER, FRAG_SHADER)?;
+        let vertices_rect = vertices.as_slice();
 
-        gl.attach_shader(&program, &vert_shader);
-        gl.attach_shader(&program, &frag_shader);
-        gl.link_program(&program);
-
-        let status = gl.get_program_parameter(&program, WebGlRenderingContext::LINK_STATUS)
-            .as_bool()
-            .ok_or(CmcError::missing_val("Link status"))?;
-
-        if !status {
-            let log = gl.get_program_info_log(&program).ok_or(CmcError::missing_val("Program log"))?;
-            Err(CmcError::ShaderLink{ log })?;
-        }
-        let vertices_rect: [f32; 12] = [
-            -0.5, -0.5, 0.,
-            -0.5, 0.5, 0.,
-            0.5, -0.5, 0.,
-            0.5, 0.5, 0.,
-        ];
-
-        let indices_rect: [u16; 6] = [0, 1, 2, 2, 1, 3];
+        let indices_rect = indices.as_slice();
 
         let memory_buffer = wasm_bindgen::memory()
             .dyn_into::<WebAssembly::Memory>()?
@@ -69,7 +71,8 @@ impl SimpleRenderer {
             .ok_or(CmcError::missing_val("uOpacity"))?;
         let u_transform = gl.get_uniform_location(&program, "uTransform")
             .ok_or(CmcError::missing_val("uTransform"))?;
-        Ok(SimpleRenderer {
+        Ok(ShapeRenderer {
+            name: name.clone(),
             program,
             rect_vertice_buffer,
             index_buffer: indices_buffer,
@@ -81,16 +84,12 @@ impl SimpleRenderer {
     }
 }
 
-pub trait Renderer {
-    fn render(&self, gl: &WebGlRenderingContext, canvas_height: f32, canvas_width: f32, location: &Vector3<f32>, rotation: &Vector3<f32>);
-}
-
-impl Renderer for SimpleRenderer {
+impl Renderer for ShapeRenderer {
     fn render(
         &self,
         gl: &WebGlRenderingContext,
-        canvas_height: f32,
-        canvas_width: f32,
+        view: &Isometry3<f32>,
+        projection: &Perspective3<f32>,
         location: &Vector3<f32>,
         rotation: &Vector3<f32>,
     ) {
@@ -108,16 +107,7 @@ impl Renderer for SimpleRenderer {
             1.0,//a
         );
         gl.uniform1f(Some(&self.u_opacity), 1.);
-        let aspect: f32 = canvas_width / canvas_height;
-        pub const FIELD_OF_VIEW: f32 = 45. * std::f32::consts::PI / 180.; //in radians
-        pub const Z_FAR: f32 = 1000.;
-        pub const Z_NEAR: f32 = 1.0;
-        let eye    = Point3::new(0.0, 0.0, 3.0);
-        let target = Point3::new(0.0, 0.0, 1.0);
-        let view   = Isometry3::look_at_rh(&eye, &target, &Vector3::y());
-
-        let model      = Isometry3::new(location.clone(), rotation.clone());
-        let projection = Perspective3::new(aspect, FIELD_OF_VIEW, Z_NEAR, Z_FAR);
+        let model = Isometry3::new(location.clone(), rotation.clone());
         let mvp = projection.as_matrix() * (view * model).to_homogeneous();
 
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_transform), false, mvp.as_slice());
@@ -125,7 +115,6 @@ impl Renderer for SimpleRenderer {
         gl.bind_buffer(WebGL::ELEMENT_ARRAY_BUFFER, Some(&self.index_buffer));
 
         gl.draw_elements_with_i32(WebGL::TRIANGLES, self.index_count, WebGL::UNSIGNED_SHORT, 0);
-
     }
 }
 
