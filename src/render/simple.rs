@@ -1,4 +1,5 @@
-use crate::{render::Renderer, common::compile_shader, error::{CmcError, CmcResult}};
+use crate::{render::Renderer, error::{CmcError, CmcResult}};
+use super::common::build_program;
 use js_sys::WebAssembly;
 use nalgebra::{Isometry3, Perspective3, Vector3};
 use wasm_bindgen::JsCast;
@@ -37,22 +38,7 @@ pub struct SimpleRenderer {
 
 impl SimpleRenderer {
     pub fn new(gl: &WebGlRenderingContext) -> CmcResult<Self> {
-        let program = gl.create_program().ok_or(CmcError::missing_val("create program"))?;
-        let vert_shader = compile_shader(&gl, WebGL::VERTEX_SHADER, VERT_SHADER)?;
-        let frag_shader = compile_shader(&gl, WebGL::FRAGMENT_SHADER, FRAG_SHADER)?;
-
-        gl.attach_shader(&program, &vert_shader);
-        gl.attach_shader(&program, &frag_shader);
-        gl.link_program(&program);
-
-        let status = gl.get_program_parameter(&program, WebGlRenderingContext::LINK_STATUS)
-            .as_bool()
-            .ok_or(CmcError::missing_val("Link status"))?;
-
-        if !status {
-            let log = gl.get_program_info_log(&program).ok_or(CmcError::missing_val("Program log"))?;
-            Err(CmcError::ShaderLink{ log })?;
-        }
+        let program = build_program(gl, VERT_SHADER, FRAG_SHADER)?;
         let vertices_rect: [f32; 12] = [
             -0.5, -0.5, 0.,
             -0.5, 0.5, 0.,

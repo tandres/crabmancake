@@ -86,19 +86,19 @@ fn build_renderer(gl: &WebGlRenderingContext, object: &Object) -> CmcResult<(Str
         for shape in geo.shapes.iter() {
             match shape.primitive {
                 Primitive::Triangle(a, b, c) => {
-                    let missing_index = CmcError::missing_val("missing normal index!");
-                    let out_of_range = CmcError::missing_val("Normal index out of range!");
+                    let missing_index = "missing normal index";
+                    let out_of_range = "Normal index out of range!";
                     indices.push(a.0 as u16);
                     indices.push(b.0 as u16);
                     indices.push(c.0 as u16);
-                    let index = a.2.ok_or(missing_index)?;
-                    let normal = object.normals.get(index).ok_or(out_of_range)?;
+                    let index = a.2.ok_or(CmcError::missing_val(missing_index))?;
+                    let normal = object.normals.get(index).ok_or(CmcError::missing_val(out_of_range))?;
                     normals.append(&mut CmcVertex::from(normal).into());
-                    let index = b.2.ok_or(missing_index)?;
-                    let normal = object.normals.get(index).ok_or(out_of_range)?;
+                    let index = b.2.ok_or(CmcError::missing_val(missing_index))?;
+                    let normal = object.normals.get(index).ok_or(CmcError::missing_val(out_of_range))?;
                     normals.append(&mut CmcVertex::from(normal).into());
-                    let index = b.2.ok_or(missing_index)?;
-                    let normal = object.normals.get(index).ok_or(out_of_range)?;
+                    let index = c.2.ok_or(CmcError::missing_val(missing_index))?;
+                    let normal = object.normals.get(index).ok_or(CmcError::missing_val(out_of_range))?;
                     normals.append(&mut CmcVertex::from(normal).into());
                 },
                 _ => warn!("Unsupported primitive type!"),
