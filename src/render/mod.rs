@@ -73,13 +73,13 @@ fn build_renderer(gl: &WebGlRenderingContext, object: &Object) -> CmcResult<(Str
         vertices.push(vert.z as f32);
     }
 
-    trace!("Object name: {}", object.name);
-    trace!("Vertices: {:?}", object.vertices.len());
-    trace!("Geometries: {:?}", object.geometry.len());
-    for geo in object.geometry.iter() {
-        trace!("Geometry: {:#?}", geo);
-    }
-    trace!("Final vertice count {}", vertices.len());
+    // trace!("Object name: {}", object.name);
+    // trace!("Vertices: {:?}", object.vertices.len());
+    // trace!("Geometries: {:?}", object.geometry.len());
+    // for geo in object.geometry.iter() {
+    //     trace!("Geometry: {:#?}", geo);
+    // }
+    // trace!("Final vertice count {}", vertices.len());
     let mut indices: Vec<u16> = Vec::new();
     let mut normals: Vec<f32> = Vec::new();
     for geo in object.geometry.iter() {
@@ -94,12 +94,15 @@ fn build_renderer(gl: &WebGlRenderingContext, object: &Object) -> CmcResult<(Str
                     let index = a.2.ok_or(CmcError::missing_val(missing_index))?;
                     let normal = object.normals.get(index).ok_or(CmcError::missing_val(out_of_range))?;
                     normals.append(&mut CmcVertex::from(normal).into());
+                    trace!("Triangle: A: {}({:?}) -> {}({:?})", a.0, object.vertices[a.0], index, normal);
                     let index = b.2.ok_or(CmcError::missing_val(missing_index))?;
                     let normal = object.normals.get(index).ok_or(CmcError::missing_val(out_of_range))?;
                     normals.append(&mut CmcVertex::from(normal).into());
+                    trace!("          B: {}({:?}) -> {}({:?})", b.0, object.vertices[b.0], index, normal);
                     let index = c.2.ok_or(CmcError::missing_val(missing_index))?;
                     let normal = object.normals.get(index).ok_or(CmcError::missing_val(out_of_range))?;
                     normals.append(&mut CmcVertex::from(normal).into());
+                    trace!("          C: {}({:?}) -> {}({:?})", c.0, object.vertices[c.0], index, normal);
                 },
                 _ => warn!("Unsupported primitive type!"),
             }

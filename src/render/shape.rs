@@ -12,34 +12,32 @@ const VERT_SHADER: &str = r#"
 
     uniform mat4 uTransform;
     uniform mat4 uNormalRot;
-    uniform vec3 uColor;
-    uniform vec3 uAmbient;
-    uniform vec3 uDirectional;
-    uniform vec3 uDirectionalVector;
-    varying lowp vec4 vColor;
+    varying vec3 vNormal;
 
     void main() {
         gl_Position = uTransform * aPosition;
-
-        vec3 directionalVector = normalize(uDirectionalVector);
-        vec4 transformedNormal = uNormalRot * vec4(aNormal, 1.0);
-
-        float directional = max(dot(transformedNormal.xyz, directionalVector), 0.0);
-        vec3 vLighting = uAmbient + (uDirectional * directional);
-
-        vColor = vec4(uColor * vLighting, 1.0);
+        vNormal = (uNormalRot * vec4(aNormal, 1.0)).xyz;
     }
 "#;
 
 const FRAG_SHADER: &str = r#"
     precision mediump float;
-
-    uniform float uOpacity;
-
-    varying lowp vec4 vColor;
+    uniform vec3 uAmbientLight;
+    uniform vec3 uDirLightColor;
+    uniform vec3 uDirLightVector;
+    uniform vec4 uColor;
+    varying vec3 vNormal;
 
     void main() {
-        gl_FragColor = vec4(vColor.r, vColor.g, vColor.b, vColor.a * uOpacity);
+        vec3 normal = normalize(vNormal);
+
+        vec3 dirLightVector = normalize(uDirLightVector);
+
+        float directional = dot(normal, dirLightVector);
+        vec3 lighting = uAmbientLight + (uDirLightColor * directional);
+
+        gl_FragColor = uColor * 0.0001 + vec4(normal, 1.0);
+        gl_FragColor.rgb *= lighting;
     }
 "#;
 
@@ -51,17 +49,17 @@ pub struct ShapeRenderer {
     index_buffer: WebGlBuffer,
     index_count: i32,
     u_color: WebGlUniformLocation,
-    u_opacity: WebGlUniformLocation,
     u_transform: WebGlUniformLocation,
-    u_ambient: WebGlUniformLocation,
-    u_directional: WebGlUniformLocation,
-    u_directional_vector: WebGlUniformLocation,
+    u_ambient_light: WebGlUniformLocation,
+    u_dir_light_color: WebGlUniformLocation,
+    u_dir_light_vector: WebGlUniformLocation,
     u_normal_rot: WebGlUniformLocation,
 }
 
 impl ShapeRenderer {
     pub fn new(name: &String, gl: &WebGlRenderingContext, vertices: Vec<f32>, indices: Vec<u16>, normals: Vec<f32>) -> CmcResult<Self> {
         let program = build_program(gl, VERT_SHADER, FRAG_SHADER)?;
+
         let vertices_rect = vertices.as_slice();
 
         let indices_rect = indices.as_slice();
@@ -102,18 +100,16 @@ impl ShapeRenderer {
         gl.buffer_data_with_array_buffer_view(WebGL::ELEMENT_ARRAY_BUFFER, &indices_array, WebGL::STATIC_DRAW);
         let u_color = gl.get_uniform_location(&program, "uColor")
             .ok_or(CmcError::missing_val("uColor"))?;
-        let u_opacity = gl.get_uniform_location(&program, "uOpacity")
-            .ok_or(CmcError::missing_val("uOpacity"))?;
         let u_transform = gl.get_uniform_location(&program, "uTransform")
             .ok_or(CmcError::missing_val("uTransform"))?;
         let u_normal_rot = gl.get_uniform_location(&program, "uNormalRot")
             .ok_or(CmcError::missing_val("uNormalRot"))?;
-        let u_ambient = gl.get_uniform_location(&program, "uAmbient")
-            .ok_or(CmcError::missing_val("uAmbient"))?;
-        let u_directional = gl.get_uniform_location(&program, "uDirectional")
-            .ok_or(CmcError::missing_val("uDirectional"))?;
-        let u_directional_vector = gl.get_uniform_location(&program, "uDirectionalVector")
-            .ok_or(CmcError::missing_val("uDirectionalVector"))?;
+        let u_ambient_light = gl.get_uniform_location(&program, "uAmbientLight")
+            .ok_or(CmcError::missing_val("uAmbientLight"))?;
+        let u_dir_light_color = gl.get_uniform_location(&program, "uDirLightColor")
+            .ok_or(CmcError::missing_val("uDirLightColor"))?;
+        let u_dir_light_vector = gl.get_uniform_location(&program, "uDirLightVector")
+            .ok_or(CmcError::missing_val("uDirLightVector"))?;
         Ok(ShapeRenderer {
             name: name.clone(),
             program,
@@ -122,11 +118,10 @@ impl ShapeRenderer {
             index_count: indices_array.length() as i32,
             normals_buffer,
             u_color,
-            u_opacity,
             u_transform,
-            u_ambient,
-            u_directional,
-            u_directional_vector,
+            u_ambient_light,
+            u_dir_light_color,
+            u_dir_light_vector,
             u_normal_rot,
         })
     }
@@ -151,26 +146,26 @@ impl Renderer for ShapeRenderer {
         gl.vertex_attrib_pointer_with_i32(1, 3, WebGL::FLOAT, false, 0, 0);
         gl.enable_vertex_attrib_array(1);
 
-        gl.uniform3f(
+        gl.uniform4f(
             Some(&self.u_color),
             0., //r
             0.5,//g
             0.5,//b
+            1.0,//a
         );
-        gl.uniform1f(Some(&self.u_opacity), 1.);
         let model = Isometry3::new(location.clone(), rotation.clone());
-        let normal_rot = Isometry3::rotation(rotation.clone()).inverse();
+        let normal_rot = Isometry3::rotation(rotation.clone()).to_homogeneous();
         let mvp = projection.as_matrix() * (view * model).to_homogeneous();
 
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_transform), false, mvp.as_slice());
-        gl.uniform_matrix4fv_with_f32_array(Some(&self.u_normal_rot), false, normal_rot.to_homogeneous().as_slice());
+        gl.uniform_matrix4fv_with_f32_array(Some(&self.u_normal_rot), false, normal_rot.as_slice());
 
-        let ambient_light = vec![0.1, 0.1, 0.1];
-        gl.uniform3fv_with_f32_array(Some(&self.u_ambient), ambient_light.as_slice());
+        let ambient_light = vec![0.5, 0.5, 0.5];
+        gl.uniform3fv_with_f32_array(Some(&self.u_ambient_light), ambient_light.as_slice());
         let directional_light = vec![1., 1., 1.];
-        gl.uniform3fv_with_f32_array(Some(&self.u_directional), directional_light.as_slice());
-        let directional_vector = vec![0.5, 0.5, 0.5];
-        gl.uniform3fv_with_f32_array(Some(&self.u_directional_vector), directional_vector.as_slice());
+        gl.uniform3fv_with_f32_array(Some(&self.u_dir_light_color), directional_light.as_slice());
+        let directional_light_vector = vec![0., 1.0, 0.];
+        gl.uniform3fv_with_f32_array(Some(&self.u_dir_light_vector), directional_light_vector.as_slice());
 
         gl.bind_buffer(WebGL::ELEMENT_ARRAY_BUFFER, Some(&self.index_buffer));
 

@@ -38,7 +38,9 @@ impl CmcClient {
         for i in 0..SHAPE_BLOCK_CNT {
             for j in 0..SHAPE_BLOCK_CNT {
                 let entity = Entity::new_at(Vector3::new(i as f32 * 5., 0., j as f32 * 5.));
-                let cube_renderer = rendercache.get_shaperenderer("Suzanne").expect("Failed to get renderer");
+                // entity::set_rot_rate(&mut entity, Vector3::y() * 0.25 * (i + (j + 1)) as f32);
+                //let cube_renderer = rendercache.get_shaperenderer("Suzanne").expect("Failed to get renderer");
+                let cube_renderer = rendercache.get_shaperenderer("Cube").expect("Failed to get renderer");
                 let shape = Shape::new(cube_renderer, entity);
                 shapes.push(shape);
             }
@@ -64,7 +66,7 @@ impl CmcClient {
     }
 
     pub fn render(&self) {
-        trace!("Render called");
+        // trace!("Render called");
         let state = state::get_curr();
 
         self.web_gl.clear(WebGL::COLOR_BUFFER_BIT | WebGL::DEPTH_BUFFER_BIT);
@@ -74,7 +76,7 @@ impl CmcClient {
         pub const FIELD_OF_VIEW: f32 = 45. * std::f32::consts::PI / 180.; //in radians
         pub const Z_FAR: f32 = 1000.;
         pub const Z_NEAR: f32 = 1.0;
-        let eye    = eye_rot * Point3::new(3.0, 3.0, 3.0);
+        let eye    = eye_rot * Point3::new(-3.0, 5.0, -3.0);
 
         let target = Point3::new(0.0, 0.0, 0.0);
         let view   = Isometry3::look_at_rh(&eye, &target, &Vector3::y());
