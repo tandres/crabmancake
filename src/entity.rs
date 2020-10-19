@@ -20,6 +20,10 @@ impl Entity {
     pub fn new_stationary() -> Self {
         Entity::new(Vector3::zeros(), Vector3::zeros(), Vector3::zeros(), Vector3::zeros())
     }
+
+    pub fn new_at(loc: Vector3<f32>) -> Self {
+        Entity::new(loc, Vector3::zeros(), Vector3::zeros(), Vector3::zeros())
+    }
 }
 
 pub fn set_rot_rate(entity: &mut Entity, new_rate: Vector3<f32>) {
