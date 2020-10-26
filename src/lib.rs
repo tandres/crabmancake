@@ -34,11 +34,11 @@ impl CmcClient {
         let gl = setup_gl_context(&document)?;
         let rendercache = render::build_rendercache(&gl, &MODEL_DIR).expect("Failed to create rendercache");
         let mut shapes = Vec::new();
-        const SHAPE_BLOCK_CNT : usize = 2;
+        const SHAPE_BLOCK_CNT : usize = 1;
         for i in 0..SHAPE_BLOCK_CNT {
             for j in 0..SHAPE_BLOCK_CNT {
-                let entity = Entity::new_at(Vector3::new(i as f32 * 5., 0., j as f32 * 5.));
-                // entity::set_rot_rate(&mut entity, Vector3::y() * 0.25 * (i + (j + 1)) as f32);
+                let mut entity = Entity::new_at(Vector3::new(i as f32 * 5., 0., j as f32 * 5.));
+                entity::set_rot_rate(&mut entity, Vector3::y() * 0.25 * (i + (j + 1)) as f32);
                 //let cube_renderer = rendercache.get_shaperenderer("Suzanne").expect("Failed to get renderer");
                 let cube_renderer = rendercache.get_shaperenderer("Cube").expect("Failed to get renderer");
                 let shape = Shape::new(cube_renderer, entity);
@@ -106,8 +106,8 @@ fn setup_gl_context(doc: &Document) -> Result<web_sys::WebGlRenderingContext, Js
     attach_mouse_move_handler(&canvas)?;
 
     context.enable(WebGL::DEPTH_TEST);
-    //context.enable(WebGL::BLEND);
-    //context.blend_func(WebGL::SRC_ALPHA, WebGL::ONE_MINUS_SRC_ALPHA);
+    context.enable(WebGL::BLEND);
+    context.blend_func(WebGL::SRC_ALPHA, WebGL::ONE_MINUS_SRC_ALPHA);
     context.clear_color(0., 0., 0., 1.);
     context.clear_depth(1.);
     Ok(context)

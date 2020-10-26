@@ -86,6 +86,7 @@ fn build_renderer(gl: &WebGlRenderingContext, object: &Object) -> CmcResult<(Str
         for shape in geo.shapes.iter() {
             match shape.primitive {
                 Primitive::Triangle(a, b, c) => {
+                    trace!("Prim: {:?}", shape.primitive);
                     let missing_index = "missing normal index";
                     let out_of_range = "Normal index out of range!";
                     indices.push(a.0 as u16);
