@@ -58,6 +58,13 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, model_dir: &Dir) -> CmcResu
             }
         }
     }
+    let test_triangle = ShapeRenderer::new(
+        &"test_triangle".to_string(),
+        gl,
+        vec![1.,1.,0.,-1.,1.,0.,-1.,-1.,0.],
+        vec![0, 1, 2],
+        vec![0.,0.,-1.,0.,0.,-1.,0.,0.,-1.])?;
+    shape_renderers.insert("test_triangle".to_string(), Rc::new(test_triangle));
     Ok(RenderCache {
         simple_renderer,
         shape_renderers,

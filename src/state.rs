@@ -48,6 +48,7 @@ pub struct AppState {
     pub rotation_x_axis: f32,
     pub rotation_y_axis: f32,
     pub time: f32,
+    pub rotations: [f64; 3],
 }
 
 impl AppState {
@@ -65,6 +66,7 @@ impl AppState {
             rotation_x_axis: -0.5,
             rotation_y_axis: -0.5,
             time: 0.,
+            rotations: [0.; 3],
         }
     }
 }
@@ -100,6 +102,16 @@ pub fn update_mouse_position(x: f32, y: f32) {
         mouse_y: inverted_y,
         rotation_x_axis: data.rotation_x_axis + rotation_x_delta,
         rotation_y_axis: data.rotation_y_axis - rotation_y_delta,
+        ..*data.clone()
+    });
+}
+
+pub fn update_shape_rotation(index: usize, value: f64) {
+    let mut data = APP_STATE.lock().unwrap();
+    let mut rotations = data.rotations.clone();
+    rotations[index] = value;
+    *data = Arc::new(AppState {
+        rotations,
         ..*data.clone()
     });
 }
