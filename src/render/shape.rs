@@ -57,12 +57,10 @@ pub struct ShapeRenderer {
     u_ambient_light: WebGlUniformLocation,
     u_dir_light_color: WebGlUniformLocation,
     u_dir_light_vector: WebGlUniformLocation,
-    normal_renderer: Option<NormalRenderer>,
 }
 
 impl ShapeRenderer {
     pub fn new(name: &String, gl: &WebGlRenderingContext, vertices: Vec<f32>, indices: Vec<u16>, normals: Vec<f32>) -> CmcResult<Self> {
-        // let normal_renderer = NormalRenderer::new(&"Normal".to_string(), gl, &vertices, &indices, &normals)?;
         let program = build_program(gl, VERT_SHADER, FRAG_SHADER)?;
 
         let vertices_rect = vertices.as_slice();
@@ -134,8 +132,6 @@ impl ShapeRenderer {
             u_ambient_light,
             u_dir_light_color,
             u_dir_light_vector,
-            normal_renderer: None,
-            // normal_renderer: Some(normal_renderer),
         })
     }
 }
@@ -184,144 +180,6 @@ impl Renderer for ShapeRenderer {
         gl.bind_buffer(WebGL::ELEMENT_ARRAY_BUFFER, Some(&self.index_buffer));
 
         gl.draw_elements_with_i32(WebGL::TRIANGLES, self.index_count, WebGL::UNSIGNED_SHORT, 0);
-
-        if let Some(normal_renderer) = &self.normal_renderer {
-            normal_renderer.render(gl, view, projection, location, rotation);
-        }
     }
 }
 
-const NORMAL_VERT_SHADER: &str = r#"
-    attribute vec4 aPosition;
-    attribute vec3 aNormal;
-
-    uniform mat4 uView;
-    uniform mat4 uProjection;
-    uniform mat4 uModel;
-
-    void main() {
-        vec4 position = aPosition;
-        position.xyz += aNormal;
-        gl_Position = uProjection * ((uView * uModel) * position);
-    }
-"#;
-
-const NORMAL_FRAG_SHADER: &str = r#"
-    precision mediump float;
-    uniform vec4 uColor;
-
-    void main() {
-        gl_FragColor = uColor;
-    }
-"#;
-
-pub struct NormalRenderer {
-    pub name: String,
-    program: WebGlProgram,
-    vertex_buffer: WebGlBuffer,
-    vertex_count: i32,
-    u_color: WebGlUniformLocation,
-    u_view: WebGlUniformLocation,
-    u_projection: WebGlUniformLocation,
-    u_model: WebGlUniformLocation,
-    normals_buffer: WebGlBuffer,
-}
-
-impl NormalRenderer {
-    pub fn new(name: &String, gl: &WebGlRenderingContext, vertices: &Vec<f32>, indices: &Vec<u16>, normals: &Vec<f32>) -> CmcResult<Self> {
-        let program = build_program(gl, NORMAL_VERT_SHADER, NORMAL_FRAG_SHADER)?;
-
-        let vertices_rect = vertices.as_slice();
-        let normals_rect = normals.as_slice();
-        let mut normals_mut : Vec<f32> = Vec::new();
-        let mut normal_lines : Vec<f32> = Vec::new();
-        log::trace!("Indices len: {}", indices.len());
-        for i in 0..indices.len() {
-            let index = (3 * indices[i]) as usize;
-            log::trace!("I: {} indices[i]: {} Index: {}", i, indices[i], index);
-            let first = Vector3::new(vertices_rect[index + 0], vertices_rect[index + 1], vertices_rect[index + 2]);
-            let norm = Vector3::new(normals_rect[i * 3], normals_rect[i * 3 + 1], normals_rect[i * 3 + 2]);
-            normal_lines.extend(first.as_slice());
-            normals_mut.extend(Vector3::zeros().as_slice());
-            normal_lines.extend(first.as_slice());
-            normals_mut.extend(norm.as_slice());
-        }
-        let normal_lines = normal_lines.as_slice();
-
-        let normals_buffer = wasm_bindgen::memory()
-            .dyn_into::<WebAssembly::Memory>()?
-            .buffer();
-        let normals_location = normals_mut.as_ptr() as u32 / 4;
-        let normals_array = js_sys::Float32Array::new(&normals_buffer).subarray(
-            normals_location,
-            normals_location + normals_mut.len() as u32);
-        let normals_buffer = gl.create_buffer().ok_or(CmcError::missing_val("Failed to create normals buffer"))?;
-        gl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&normals_buffer));
-        gl.buffer_data_with_array_buffer_view(WebGL::ARRAY_BUFFER, &normals_array, WebGL::STATIC_DRAW);
-
-        let vertex_buffer = wasm_bindgen::memory()
-            .dyn_into::<WebAssembly::Memory>()?
-            .buffer();
-        let vertex_location = normal_lines.as_ptr() as u32 / 4;
-        let vertex_array = js_sys::Float32Array::new(&vertex_buffer).subarray(
-            vertex_location,
-            vertex_location + normal_lines.len() as u32);
-        let vertex_buffer = gl.create_buffer().ok_or(CmcError::missing_val("Failed to create normal lines buffer"))?;
-        gl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&vertex_buffer));
-        gl.buffer_data_with_array_buffer_view(WebGL::ARRAY_BUFFER, &vertex_array, WebGL::STATIC_DRAW);
-
-        let u_color = gl.get_uniform_location(&program, "uColor")
-            .ok_or(CmcError::missing_val("uColor"))?;
-        let u_view = gl.get_uniform_location(&program, "uView")
-            .ok_or(CmcError::missing_val("uView"))?;
-        let u_projection = gl.get_uniform_location(&program, "uProjection")
-            .ok_or(CmcError::missing_val("uProjection"))?;
-        let u_model = gl.get_uniform_location(&program, "uModel")
-            .ok_or(CmcError::missing_val("uModel"))?;
-        let vertex_count = vertex_array.length() as i32;
-        log::info!("{} normals with {} vertices", indices.len(), vertex_count);
-        Ok(NormalRenderer {
-            name: name.clone(),
-            program,
-            u_color,
-            u_model,
-            u_projection,
-            u_view,
-            vertex_buffer,
-            vertex_count,
-            normals_buffer,
-        })
-    }
-}
-
-impl Renderer for NormalRenderer {
-    fn render(
-        &self,
-        gl: &WebGlRenderingContext,
-        view: &Isometry3<f32>,
-        projection: &Perspective3<f32>,
-        location: &Vector3<f32>,
-        rotation: &Vector3<f32>,
-    ) {
-        gl.use_program(Some(&self.program));
-
-        gl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&self.vertex_buffer));
-        gl.vertex_attrib_pointer_with_i32(0, 3, WebGL::FLOAT, false, 0, 0);
-        gl.enable_vertex_attrib_array(0);
-
-        gl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&self.normals_buffer));
-        gl.vertex_attrib_pointer_with_i32(1, 3, WebGL::FLOAT, false, 0, 0);
-        gl.enable_vertex_attrib_array(1);
-
-        gl.uniform4f(Some(&self.u_color), 1., 1., 1., 1.);
-
-        let model = Isometry3::new(location.clone(), rotation.clone()).to_homogeneous();
-        let projection = projection.as_matrix();
-        let view = view.to_homogeneous();
-        gl.uniform_matrix4fv_with_f32_array(Some(&self.u_view), false, view.as_slice());
-        gl.uniform_matrix4fv_with_f32_array(Some(&self.u_projection), false, projection.as_slice());
-        gl.uniform_matrix4fv_with_f32_array(Some(&self.u_model), false, model.as_slice());
-
-        gl.draw_arrays(WebGL::LINES, 0, self.vertex_count / 3 );
-    }
-}

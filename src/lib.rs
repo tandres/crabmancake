@@ -1,5 +1,5 @@
 use crate::{entity::Entity, shape::Shape, error::CmcError, render::{RenderCache, ShapeRenderer}};
-use log::{info, trace};
+use log::trace;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::*;
@@ -57,10 +57,6 @@ impl CmcClient {
             shapes,
         };
         Ok(client)
-    }
-
-    pub fn say_hello(&self) {
-        info!("Hello from wasm-rust!");
     }
 
     pub fn update(&mut self, elapsed_time: f32, height: f32, width: f32) -> Result<(), JsValue> {
