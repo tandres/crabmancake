@@ -5,6 +5,7 @@ use std::{collections::HashMap, rc::Rc};
 use web_sys::*;
 use include_dir::Dir;
 use wavefront_obj::obj::{Object, parse, Primitive};
+use gltf::{mesh::{util::ReadIndices, Mesh, Semantic}, buffer::Data, Gltf, iter::Buffers};
 
 mod simple;
 mod shape;
@@ -43,18 +44,29 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, model_dir: &Dir) -> CmcResu
         let path = file.path();
         trace!("{} extension: {:?}", path.display(), path.extension());
         if let Some(ext) = path.extension() {
-            match (ext.to_str(), file.contents_utf8()) {
-                (_, None) => error!("Failed to convert file contents to utf8!"),
-                (Some("obj"), Some(contents)) => {
-                    for obj in parse(contents.to_string())?.objects.iter() {
-                        let (obj_name, renderer) = build_renderer(gl, obj)?;
+            match ext.to_str() {
+                Some("obj") => {
+                    if let Some(contents) = file.contents_utf8() {
+                        for obj in parse(contents.to_string())?.objects.iter() {
+                            let (obj_name, renderer) = build_renderer_wav(gl, obj)?;
+                            if let Some(old) = shape_renderers.insert(obj_name, Rc::new(renderer)) {
+                                warn!("Replaced renderer: {}", old.name);
+                            }
+                        }
+                    }
+                }
+                Some("glb") => {
+                    let (gltf, buffers, images) = gltf::import_slice(file.contents())?;
+                    trace!("Gltf contents: {:?}", gltf);
+                    for mesh in gltf.meshes() {
+                        let (obj_name, renderer) = build_renderer_glb(gl, &mesh, &buffers, &images)?;
                         if let Some(old) = shape_renderers.insert(obj_name, Rc::new(renderer)) {
                             warn!("Replaced renderer: {}", old.name);
                         }
                     }
                 }
-                (Some(other), Some(_contents)) => warn!("Unhandled file extension {}", other),
-                (None, _) => error!("Failed to convert extension to string for {:?}", file),
+                Some(other) => warn!("Unhandled file extension {}", other),
+                None => error!("Failed to convert extension to string for {:?}", file),
             }
         }
     }
@@ -71,8 +83,42 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, model_dir: &Dir) -> CmcResu
     })
 }
 
-fn build_renderer(gl: &WebGlRenderingContext, object: &Object) -> CmcResult<(String, ShapeRenderer)> {
-    let name = object.name.clone();
+fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<Data>, _images: &Vec<gltf::image::Data>) -> CmcResult<(String, ShapeRenderer)> {
+    let name = object.name().ok_or(CmcError::missing_val("Glb mesh name")).unwrap();
+    let name = format!("{}_{}", name, "glb");
+    trace!("Name: {}", name);
+    let mut out_vertices = Vec::new();
+    let mut out_indices = Vec::new();
+    let mut out_normals = Vec::new();
+    for prim in object.primitives() {
+        trace!("Mode: {:?}", prim.mode());
+        let reader = prim.reader(|buffer| Some(&buffers[buffer.index()]));
+        if let Some(positions) = reader.read_positions() {
+            for position in positions {
+                trace!("Positions: {:?}", position);
+                out_vertices.extend_from_slice(&position);
+            }
+        }
+        if let Some(indices) = reader.read_indices() {
+            for index in indices.into_u32() {
+                trace!("Index: {:?}", index);
+                out_indices.push(index as u16);
+            }
+        }
+        if let Some(normals) = reader.read_normals() {
+            for normal in normals {
+                trace!("Normal: {:?}", normal);
+                out_normals.extend_from_slice(&normal);
+            }
+        }
+    }
+    trace!("Indices: {} Vertices: {} Normals: {}", out_indices.len(), out_vertices.len(), out_normals.len());
+    let renderer = ShapeRenderer::new(&name, gl, out_vertices, out_indices, out_normals)?;
+    Ok((name, renderer))
+}
+
+fn build_renderer_wav(gl: &WebGlRenderingContext, object: &Object) -> CmcResult<(String, ShapeRenderer)> {
+    let name = format!("{}_{}", object.name, "wav");
     let mut vertices: Vec<f32> = Vec::new();
     for vert in object.vertices.iter() {
         vertices.push(vert.x as f32);

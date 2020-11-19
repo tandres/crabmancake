@@ -60,7 +60,7 @@ impl CmcClient {
             }
         }
         let entity = Entity::new_at(Vector3::new(2.,1.,0.));
-        let cube_renderer = rendercache.get_shaperenderer("Cube").expect("Failed to get renderer");
+        let cube_renderer = rendercache.get_shaperenderer("Cube_glb").expect("Failed to get renderer");
         shapes.push(Shape::new(cube_renderer, entity));
         let client = CmcClient {
             web_gl: gl,

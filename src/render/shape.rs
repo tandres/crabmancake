@@ -62,7 +62,7 @@ pub struct ShapeRenderer {
 
 impl ShapeRenderer {
     pub fn new(name: &String, gl: &WebGlRenderingContext, vertices: Vec<f32>, indices: Vec<u16>, normals: Vec<f32>) -> CmcResult<Self> {
-        let normal_renderer = NormalRenderer::new(&"Normal".to_string(), gl, &vertices, &indices, &normals)?;
+        // let normal_renderer = NormalRenderer::new(&"Normal".to_string(), gl, &vertices, &indices, &normals)?;
         let program = build_program(gl, VERT_SHADER, FRAG_SHADER)?;
 
         let vertices_rect = vertices.as_slice();
@@ -134,7 +134,8 @@ impl ShapeRenderer {
             u_ambient_light,
             u_dir_light_color,
             u_dir_light_vector,
-            normal_renderer: Some(normal_renderer),
+            normal_renderer: None,
+            // normal_renderer: Some(normal_renderer),
         })
     }
 }
@@ -234,8 +235,10 @@ impl NormalRenderer {
         let normals_rect = normals.as_slice();
         let mut normals_mut : Vec<f32> = Vec::new();
         let mut normal_lines : Vec<f32> = Vec::new();
+        log::trace!("Indices len: {}", indices.len());
         for i in 0..indices.len() {
-            let index = indices[i] as usize * 3;
+            let index = (3 * indices[i]) as usize;
+            log::trace!("I: {} indices[i]: {} Index: {}", i, indices[i], index);
             let first = Vector3::new(vertices_rect[index + 0], vertices_rect[index + 1], vertices_rect[index + 2]);
             let norm = Vector3::new(normals_rect[i * 3], normals_rect[i * 3 + 1], normals_rect[i * 3 + 2]);
             normal_lines.extend(first.as_slice());
