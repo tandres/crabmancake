@@ -25,7 +25,12 @@ pub enum CmcError {
     WavefrontObjParse {
         #[from]
         error: ParseError,
-    }
+    },
+    #[error("Gltf error: {error}")]
+    Gltf {
+        #[from]
+        error: gltf::Error,
+    },
 }
 
 impl CmcError {
