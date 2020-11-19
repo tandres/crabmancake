@@ -1,5 +1,5 @@
 use crate::{entity::Entity, shape::Shape, error::CmcError, render::{RenderCache, ShapeRenderer}};
-use log::trace;
+use log::{trace, debug};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::*;
@@ -45,7 +45,7 @@ impl CmcClient {
         body.append_child(&label)?;
         body.append_child(&slider)?;
 
-        let gl = setup_gl_context(&document)?;
+        let gl = setup_gl_context(&document, true)?;
         let rendercache = render::build_rendercache(&gl, &MODEL_DIR).expect("Failed to create rendercache");
         let mut shapes = Vec::new();
         let entity = Entity::new_at(Vector3::new(0.,0.,0.));
@@ -97,7 +97,6 @@ impl CmcClient {
     }
 }
 
-
 #[wasm_bindgen]
 pub fn cmc_init() {
     console_log::init_with_level(log::Level::Trace).unwrap();
@@ -105,10 +104,16 @@ pub fn cmc_init() {
     trace!("Info:\n Git version: {}", GIT_VERSION);
 }
 
-fn setup_gl_context(doc: &Document) -> Result<web_sys::WebGlRenderingContext, JsValue> {
+fn setup_gl_context(doc: &Document, print_context_info: bool) -> Result<web_sys::WebGlRenderingContext, JsValue> {
     let canvas = doc.get_element_by_id("rustCanvas").ok_or(CmcError::missing_val("rustCanvas"))?;
     let canvas: HtmlCanvasElement = canvas.dyn_into::<HtmlCanvasElement>()?;
     let context: web_sys::WebGlRenderingContext = canvas.get_context("webgl")?.ok_or(JsValue::from_str("Failed to get webgl context"))?.dyn_into()?;
+
+    if print_context_info {
+        debug!("Max Vertex Attributes: {}", WebGL::MAX_VERTEX_ATTRIBS);
+        debug!("Max Vertex Uniform vectors: {}", WebGL::MAX_VERTEX_UNIFORM_VECTORS);
+        debug!("Max Fragment Uniform vectors: {}", WebGL::MAX_FRAGMENT_UNIFORM_VECTORS);
+    }
 
     attach_mouse_down_handler(&canvas)?;
     attach_mouse_up_handler(&canvas)?;

@@ -26,7 +26,7 @@ const FRAG_SHADER: &str = r#"
     precision mediump float;
     varying vec3 vNormal;
 
-    uniform vec3 uAmbientLight;
+    uniform vec3 uAmbientLight[2];
     uniform vec3 uDirLightColor;
     uniform vec4 uColor;
     uniform vec3 uDirLightVector;
@@ -37,7 +37,11 @@ const FRAG_SHADER: &str = r#"
         vec3 dirLightVector = normalize(uDirLightVector);
 
         float directional = max(dot(normal, dirLightVector), 0.0);
-        vec3 lighting = uAmbientLight + (directional * uDirLightColor);
+        vec3 lighting;
+        for(int i = 0; i < 2; i++) {
+            lighting += uAmbientLight[i];
+        }
+        lighting += directional * uDirLightColor;
 
         gl_FragColor = uColor * vec4(lighting, 1.0);
     }
@@ -114,6 +118,7 @@ impl ShapeRenderer {
 
         let u_ambient_light = gl.get_uniform_location(&program, "uAmbientLight")
             .ok_or(CmcError::missing_val("uAmbientLight"))?;
+        log::info!("U_ambient_light: {:?}", u_ambient_light);
         let u_dir_light_color = gl.get_uniform_location(&program, "uDirLightColor")
             .ok_or(CmcError::missing_val("uDirLightColor"))?;
         let u_dir_light_vector = gl.get_uniform_location(&program, "uDirLightVector")
@@ -170,7 +175,7 @@ impl Renderer for ShapeRenderer {
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_view), false, view_mat.as_slice());
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_projection), false, projection_mat.as_slice());
 
-        let ambient_light = vec![0.1, 0.1, 0.1];
+        let ambient_light = vec![0., 0., 0.1, 0., 0.1, 0.];
         gl.uniform3fv_with_f32_array(Some(&self.u_ambient_light), ambient_light.as_slice());
         let directional_light = vec![1., 1., 1.];
         gl.uniform3fv_with_f32_array(Some(&self.u_dir_light_color), directional_light.as_slice());
