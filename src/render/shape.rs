@@ -1,5 +1,5 @@
 use crate::error::{CmcError, CmcResult};
-use super::{Renderer, common::build_program};
+use super::{Light, Renderer, common::build_program};
 use js_sys::WebAssembly;
 use nalgebra::{Isometry3, Perspective3, Vector3};
 use wasm_bindgen::JsCast;
@@ -14,38 +14,60 @@ const VERT_SHADER: &str = r#"
     uniform mat4 uProjection;
     uniform mat4 uModel;
     varying vec3 vNormal;
+    varying vec3 vFragLoc;
 
     void main() {
         gl_Position = uProjection * ((uView * uModel) * aPosition);
-
+        vFragLoc = vec3(uModel * aPosition);
         vNormal = mat3(uModel) * aNormal;
     }
 "#;
-
+const MAX_POINT_LIGHTS: usize = 10;
 const FRAG_SHADER: &str = r#"
+    #define MAX_POINT_LIGHTS 10
     precision mediump float;
     varying vec3 vNormal;
+    varying vec3 vFragLoc;
 
-    uniform vec3 uAmbientLight[2];
-    uniform vec3 uDirLightColor;
+    uniform vec3 uAmbientLight;
     uniform vec4 uColor;
-    uniform vec3 uDirLightVector;
+
+    struct PointLight {
+        vec3 color;
+        vec3 location;
+    };
+    uniform PointLight point_lights[MAX_POINT_LIGHTS];
 
     void main() {
         vec3 normal = normalize(vNormal);
 
-        vec3 dirLightVector = normalize(uDirLightVector);
-
-        float directional = max(dot(normal, dirLightVector), 0.0);
-        vec3 lighting;
-        for(int i = 0; i < 2; i++) {
-            lighting += uAmbientLight[i];
+        vec3 lighting = uAmbientLight;
+        for(int i = 0; i < MAX_POINT_LIGHTS; i++) {
+            vec3 dirLightVector = normalize(point_lights[i].location - vFragLoc);
+            float directional = max(dot(normal, dirLightVector), 0.0);
+            lighting += directional * point_lights[i].color;
         }
-        lighting += directional * uDirLightColor;
 
         gl_FragColor = uColor * vec4(lighting, 1.0);
     }
 "#;
+
+pub struct PointLight {
+    color: WebGlUniformLocation,
+    location: WebGlUniformLocation,
+}
+
+impl PointLight {
+    fn new_at_index(gl: &WebGlRenderingContext, program: &WebGlProgram, array_name: &str, index: usize) -> CmcResult<Self> {
+        let color_name = format!("{}[{}].color", array_name, index);
+        let location_name = format!("{}[{}].location", array_name, index);
+        let color = gl.get_uniform_location(program, color_name.as_str())
+            .ok_or(CmcError::missing_val(color_name))?;
+        let location = gl.get_uniform_location(program, location_name.as_str())
+            .ok_or(CmcError::missing_val(location_name))?;
+        Ok(Self { color, location })
+    }
+}
 
 pub struct ShapeRenderer {
     pub name: String,
@@ -59,8 +81,7 @@ pub struct ShapeRenderer {
     u_view: WebGlUniformLocation,
     u_projection: WebGlUniformLocation,
     u_ambient_light: WebGlUniformLocation,
-    u_dir_light_color: WebGlUniformLocation,
-    u_dir_light_vector: WebGlUniformLocation,
+    point_lights: Vec<PointLight>,
 }
 
 impl ShapeRenderer {
@@ -119,10 +140,10 @@ impl ShapeRenderer {
         let u_ambient_light = gl.get_uniform_location(&program, "uAmbientLight")
             .ok_or(CmcError::missing_val("uAmbientLight"))?;
         log::info!("U_ambient_light: {:?}", u_ambient_light);
-        let u_dir_light_color = gl.get_uniform_location(&program, "uDirLightColor")
-            .ok_or(CmcError::missing_val("uDirLightColor"))?;
-        let u_dir_light_vector = gl.get_uniform_location(&program, "uDirLightVector")
-            .ok_or(CmcError::missing_val("uDirLightVector"))?;
+        let mut point_lights: Vec<PointLight> = Vec::new();
+        for i in 0..MAX_POINT_LIGHTS {
+            point_lights.push(PointLight::new_at_index(gl, &program, "point_lights", i)?);
+        }
         Ok(ShapeRenderer {
             name: name.clone(),
             program,
@@ -135,8 +156,7 @@ impl ShapeRenderer {
             u_view,
             u_projection,
             u_ambient_light,
-            u_dir_light_color,
-            u_dir_light_vector,
+            point_lights,
         })
     }
 }
@@ -149,6 +169,7 @@ impl Renderer for ShapeRenderer {
         projection: &Perspective3<f32>,
         location: &Vector3<f32>,
         rotation: &Vector3<f32>,
+        lights: &Vec<Light>,
     ) {
         gl.use_program(Some(&self.program));
 
@@ -162,9 +183,9 @@ impl Renderer for ShapeRenderer {
 
         gl.uniform4f(
             Some(&self.u_color),
-            0., //r
-            0.5,//g
-            0.5,//b
+            1., //r
+            1.,//g
+            1.,//b
             1.,//a
         );
         let model_mat = Isometry3::new(location.clone(), rotation.clone()).to_homogeneous();
@@ -175,13 +196,18 @@ impl Renderer for ShapeRenderer {
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_view), false, view_mat.as_slice());
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_projection), false, projection_mat.as_slice());
 
-        let ambient_light = vec![0., 0., 0.1, 0., 0.1, 0.];
+        let ambient_light = vec![0., 0., 0.1];
         gl.uniform3fv_with_f32_array(Some(&self.u_ambient_light), ambient_light.as_slice());
-        let directional_light = vec![1., 1., 1.];
-        gl.uniform3fv_with_f32_array(Some(&self.u_dir_light_color), directional_light.as_slice());
-        let directional_light_vector = -Vector3::new(0., 0., 1.);
-        gl.uniform3fv_with_f32_array(Some(&self.u_dir_light_vector), directional_light_vector.as_slice());
-
+        for (index, light) in lights.iter().enumerate() {
+            match light {
+                Light::Point{ color, location } => {
+                    let color_location = &self.point_lights[index].color;
+                    let location_location = &self.point_lights[index].location;
+                    gl.uniform3fv_with_f32_array(Some(color_location), color.as_slice());
+                    gl.uniform3fv_with_f32_array(Some(location_location), location.as_slice());
+                },
+            }
+        }
         gl.bind_buffer(WebGL::ELEMENT_ARRAY_BUFFER, Some(&self.index_buffer));
 
         gl.draw_elements_with_i32(WebGL::TRIANGLES, self.index_count, WebGL::UNSIGNED_SHORT, 0);

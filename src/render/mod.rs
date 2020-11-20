@@ -13,8 +13,24 @@ mod common;
 pub use simple::SimpleRenderer;
 pub use shape::ShapeRenderer;
 
+
+pub enum Light {
+    Point {
+        color: Vector3<f32>,
+        location: Vector3<f32>,
+    },
+}
+
+impl Light {
+    pub fn new_point(x: f32, y: f32, z: f32, r: f32, g: f32, b: f32) -> Self {
+        let location = Vector3::new(x, y, z);
+        let color = Vector3::new(r, g, b);
+        Light::Point {location, color}
+    }
+}
+
 pub trait Renderer {
-    fn render(&self, gl: &WebGlRenderingContext, view: &Isometry3<f32>, projection: &Perspective3<f32>, location: &Vector3<f32>, rotation: &Vector3<f32>);
+    fn render(&self, gl: &WebGlRenderingContext, view: &Isometry3<f32>, projection: &Perspective3<f32>, location: &Vector3<f32>, rotation: &Vector3<f32>, lights: &Vec<Light>);
 }
 
 pub struct RenderCache {

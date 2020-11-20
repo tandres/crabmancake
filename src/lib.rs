@@ -1,4 +1,4 @@
-use crate::{entity::Entity, shape::Shape, error::CmcError, render::{RenderCache, ShapeRenderer}};
+use crate::{entity::Entity, shape::Shape, error::CmcError, render::{RenderCache, ShapeRenderer, Light}};
 use log::{trace, debug};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
@@ -91,8 +91,13 @@ impl CmcClient {
         let view   = Isometry3::look_at_rh(&eye, &target, &Vector3::y());
 
         let projection = Perspective3::new(aspect, FIELD_OF_VIEW, Z_NEAR, Z_FAR);
+        let lights = vec![
+            Light::new_point(-10., 0., 0., 1., 0., 0.),
+            Light::new_point(10., 0., 0., 0., 1., 0.),
+            Light::new_point(0., 10., 0., 0., 0., 1.),
+        ];
         for shape in self.shapes.iter() {
-            shape.render(&self.web_gl, &view, &projection)
+            shape.render(&self.web_gl, &view, &projection, &lights)
         }
     }
 }
