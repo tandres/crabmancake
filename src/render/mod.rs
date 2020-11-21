@@ -1,5 +1,5 @@
 use crate::error::{CmcResult, CmcError};
-use log::{error, trace, warn};
+use log::{error, warn};
 use nalgebra::{Isometry3, Perspective3, Vector3};
 use std::{collections::HashMap, rc::Rc};
 use web_sys::*;
@@ -47,13 +47,13 @@ impl Light {
 }
 
 pub trait Renderer {
-    fn render(&self, gl: &WebGlRenderingContext, view: &Isometry3<f32>, projection: &Perspective3<f32>, location: &Vector3<f32>, rotation: &Vector3<f32>, lights: &Vec<Light>);
+    fn render(&self, gl: &WebGlRenderingContext, view: &Isometry3<f32>, eye: &Vector3<f32>, projection: &Perspective3<f32>, location: &Vector3<f32>, rotation: &Vector3<f32>, lights: &Vec<Light>);
 }
 
 pub struct RenderCache {
     #[allow(unused)]
     simple_renderer: SimpleRenderer,
-    shape_renderers: HashMap<String, Rc<ShapeRenderer>>,
+    pub shape_renderers: HashMap<String, Rc<ShapeRenderer>>,
 }
 
 impl RenderCache {
@@ -75,12 +75,12 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, model_dir: &Dir) -> CmcResu
     let simple_renderer = SimpleRenderer::new(gl)?;
     for file in model_dir.files().iter() {
         let path = file.path();
-        trace!("{} extension: {:?}", path.display(), path.extension());
+        // trace!("{} extension: {:?}", path.display(), path.extension());
         if let Some(ext) = path.extension() {
             match ext.to_str() {
                 Some("glb") => {
                     let (gltf, buffers, images) = gltf::import_slice(file.contents())?;
-                    trace!("Gltf contents: {:?}", gltf);
+                    // trace!("Gltf contents: {:?}", gltf);
                     for mesh in gltf.meshes() {
                         let (obj_name, renderer) = build_renderer_glb(gl, &mesh, &buffers, &images)?;
                         if let Some(old) = shape_renderers.insert(obj_name, Rc::new(renderer)) {
@@ -114,33 +114,33 @@ fn build_test_triangle(gl: &WebGlRenderingContext) -> CmcResult<(String, ShapeRe
 fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<Data>, _images: &Vec<gltf::image::Data>) -> CmcResult<(String, ShapeRenderer)> {
     let name = object.name().ok_or(CmcError::missing_val("Glb mesh name")).unwrap();
     let name = format!("{}_{}", name, "glb");
-    trace!("Name: {}", name);
+    // trace!("Name: {}", name);
     let mut out_vertices = Vec::new();
     let mut out_indices = Vec::new();
     let mut out_normals = Vec::new();
     for prim in object.primitives() {
-        trace!("Mode: {:?}", prim.mode());
+        // trace!("Mode: {:?}", prim.mode());
         let reader = prim.reader(|buffer| Some(&buffers[buffer.index()]));
         if let Some(positions) = reader.read_positions() {
             for position in positions {
-                trace!("Positions: {:?}", position);
+                // trace!("Positions: {:?}", position);
                 out_vertices.extend_from_slice(&position);
             }
         }
         if let Some(indices) = reader.read_indices() {
             for index in indices.into_u32() {
-                trace!("Index: {:?}", index);
+                // trace!("Index: {:?}", index);
                 out_indices.push(index as u16);
             }
         }
         if let Some(normals) = reader.read_normals() {
             for normal in normals {
-                trace!("Normal: {:?}", normal);
+                // trace!("Normal: {:?}", normal);
                 out_normals.extend_from_slice(&normal);
             }
         }
     }
-    trace!("Indices: {} Vertices: {} Normals: {}", out_indices.len(), out_vertices.len(), out_normals.len());
+    // trace!("Indices: {} Vertices: {} Normals: {}", out_indices.len(), out_vertices.len(), out_normals.len());
     let renderer = ShapeRenderer::new(&name, gl, out_vertices, out_indices, out_normals)?;
     Ok((name, renderer))
 }

@@ -92,6 +92,7 @@ impl Renderer for SimpleRenderer {
         &self,
         gl: &WebGlRenderingContext,
         view: &Isometry3<f32>,
+        _eye: &Vector3<f32>,
         projection: &Perspective3<f32>,
         location: &Vector3<f32>,
         rotation: &Vector3<f32>,

@@ -45,15 +45,23 @@ impl CmcClient {
         body.append_child(&label)?;
         body.append_child(&slider)?;
 
-        let (label, slider) = create_slider(&document, "Spot limit", 0.0..360.0, 180.0, |x| state::update_limit(x))?;
+        let (label, slider) = create_slider(&document, "Spot limit", 0.0..180.0, 90.0, |x| state::update_limit(x))?;
         body.append_child(&label)?;
         body.append_child(&slider)?;
 
         let gl = setup_gl_context(&document, true)?;
         let rendercache = render::build_rendercache(&gl, &MODEL_DIR).expect("Failed to create rendercache");
+        log::info!("Available shapes");
+        for key in rendercache.shape_renderers.keys() {
+            log::info!("{}", key);
+        }
         let mut shapes = Vec::new();
+        let entity = Entity::new_at(Vector3::new(10.,0.,0.));
+        let cube_renderer = rendercache.get_shaperenderer("Cube_glb").expect("Failed to get renderer");
+        shapes.push(Shape::new(cube_renderer, entity));
+
         let entity = Entity::new_at(Vector3::new(0.,0.,0.));
-        let cube_renderer = rendercache.get_shaperenderer("Suzanne_glb").expect("Failed to get renderer");
+        let cube_renderer = rendercache.get_shaperenderer("Sphere_glb").expect("Failed to get renderer");
         shapes.push(Shape::new(cube_renderer, entity));
         let client = CmcClient {
             web_gl: gl,
@@ -89,18 +97,18 @@ impl CmcClient {
         pub const FIELD_OF_VIEW: f32 = 45. * std::f32::consts::PI / 180.; //in radians
         pub const Z_FAR: f32 = 1000.;
         pub const Z_NEAR: f32 = 1.0;
-        let eye    = eye_rot * Point3::new(-3.0, 5.0, -3.0);
+        let eye   = eye_rot * Point3::new(3.0, 2.0, 3.0);
 
         let target = Point3::new(0.0, 0.0, 0.0);
         let view   = Isometry3::look_at_rh(&eye, &target, &Vector3::y());
 
         let projection = Perspective3::new(aspect, FIELD_OF_VIEW, Z_NEAR, Z_FAR);
         let lights = vec![
-            //Light::new_point(-10., 0., 0., 1., 0., 0.),
-            Light::new_spot([2., 2., 2.], [0.,0.,0.], [1.,1.,1.], state.limit, state.limit + 10.),
+            Light::new_point(10., 0., 0., 0.5, 0.5, 0.5),
+           Light::new_spot([-5., 0., 0.], [0.,0.,0.], [0.5,0.5,0.5], state.limit, state.limit + 1.),
         ];
         for shape in self.shapes.iter() {
-            shape.render(&self.web_gl, &view, &projection, &lights)
+            shape.render(&self.web_gl, &view, &Vector3::new(eye.x, eye.y, eye.z), &projection, &lights)
         }
     }
 }

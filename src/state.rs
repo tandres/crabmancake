@@ -68,7 +68,7 @@ impl AppState {
             rotation_y_axis: -0.5,
             time: 0.,
             rotations: [0.; 3],
-            limit: 180.,
+            limit: 175.,
         }
     }
 }

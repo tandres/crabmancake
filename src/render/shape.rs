@@ -32,8 +32,9 @@ const FRAG_SHADER: &str = r#"
     varying vec3 vNormal;
     varying vec3 vFragLoc;
 
-    uniform vec3 uAmbientLight;
     uniform vec4 uColor;
+    uniform vec3 uAmbientLight;
+    uniform vec3 uEyeLocation;
 
     struct PointLight {
         vec3 color;
@@ -52,20 +53,42 @@ const FRAG_SHADER: &str = r#"
 
     void main() {
         vec3 normal = normalize(vNormal);
+        vec3 fragment_to_view = normalize(uEyeLocation - vFragLoc);
 
         vec3 lighting = uAmbientLight;
         for(int i = 0; i < MAX_POINT_LIGHTS; i++) {
-            vec3 dirLightVector = normalize(point_lights[i].location - vFragLoc);
-            float directional = max(dot(normal, dirLightVector), 0.0);
-            lighting += directional * point_lights[i].color;
+            vec3 light_location = point_lights[i].location;
+            vec3 light_color = point_lights[i].color;
+
+            vec3 fragment_to_light = normalize(light_location - vFragLoc);
+            float diffuse_directional = max(dot(normal, fragment_to_light), 0.0);
+            float specular = 0.0;
+            if (diffuse_directional > 0.0) {
+                vec3 half_vector = normalize(fragment_to_light + fragment_to_view);
+                float viewable_reflection = dot(normal, half_vector);
+                specular = pow(max(viewable_reflection, 0.0), 32.0);
+            }
+            lighting += (diffuse_directional + specular) * light_color;
         }
 
         for(int j = 0; j < MAX_SPOT_LIGHTS; j++) {
-            vec3 dirLightVector = normalize(spot_lights[j].location - vFragLoc);
-            float dotFromDirection = dot(dirLightVector, normalize(-spot_lights[j].direction));
-            float inLight = smoothstep(spot_lights[j].outer_limit, spot_lights[j].inner_limit, dotFromDirection);
-            float directional = inLight * max(dot(normal, dirLightVector), 0.0);
-            lighting += directional * spot_lights[j].color;
+            vec3 light_location = spot_lights[j].location;
+            vec3 light_direction = spot_lights[j].direction;
+            vec3 light_color = spot_lights[j].color;
+            float outer_limit = spot_lights[j].outer_limit;
+            float inner_limit = spot_lights[j].inner_limit;
+
+            vec3 fragment_to_light = normalize(light_location - vFragLoc);
+            float dot_f2l_ldir = dot(fragment_to_light, normalize(-light_direction));
+            float inLight = smoothstep(outer_limit, inner_limit, dot_f2l_ldir);
+            float diffuse_directional = inLight * max(dot(normal, fragment_to_light), 0.0);
+            float specular = 0.0;
+            if (diffuse_directional > 0.0) {
+                vec3 half_vector = normalize(fragment_to_light + fragment_to_view);
+                float viewable_reflection = dot(normal, half_vector);
+                specular = pow(max(viewable_reflection, 0.0), 32.0);
+            }
+            lighting += (diffuse_directional + specular) * spot_lights[j].color;
         }
 
         gl_FragColor = uColor * vec4(lighting, 1.0);
@@ -130,6 +153,7 @@ pub struct ShapeRenderer {
     u_view: WebGlUniformLocation,
     u_projection: WebGlUniformLocation,
     u_ambient_light: WebGlUniformLocation,
+    u_eye: WebGlUniformLocation,
     point_lights: Vec<PointLight>,
     spot_lights: Vec<SpotLight>,
 }
@@ -162,7 +186,6 @@ impl ShapeRenderer {
         let normals_array = js_sys::Float32Array::new(&normals_buffer).subarray(
             normals_location,
             normals_location + normals_rect.len() as u32);
-        log::info!("Normals: {}", normals_rect.len());
         let normals_buffer = gl.create_buffer().ok_or(CmcError::missing_val("Failed to create normals buffer"))?;
         gl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&normals_buffer));
         gl.buffer_data_with_array_buffer_view(WebGL::ARRAY_BUFFER, &normals_array, WebGL::STATIC_DRAW);
@@ -187,9 +210,10 @@ impl ShapeRenderer {
         let u_projection = gl.get_uniform_location(&program, "uProjection")
             .ok_or(CmcError::missing_val("uProjection"))?;
 
+        let u_eye = gl.get_uniform_location(&program, "uEyeLocation")
+            .ok_or(CmcError::missing_val("uEyeLocation"))?;
         let u_ambient_light = gl.get_uniform_location(&program, "uAmbientLight")
             .ok_or(CmcError::missing_val("uAmbientLight"))?;
-        log::info!("U_ambient_light: {:?}", u_ambient_light);
         let mut point_lights: Vec<PointLight> = Vec::new();
         for i in 0..MAX_POINT_LIGHTS {
             point_lights.push(PointLight::new_at_index(gl, &program, "point_lights", i)?);
@@ -212,6 +236,7 @@ impl ShapeRenderer {
             u_ambient_light,
             point_lights,
             spot_lights,
+            u_eye,
         })
     }
 }
@@ -221,6 +246,7 @@ impl Renderer for ShapeRenderer {
         &self,
         gl: &WebGlRenderingContext,
         view: &Isometry3<f32>,
+        eye: &Vector3<f32>,
         projection: &Perspective3<f32>,
         location: &Vector3<f32>,
         rotation: &Vector3<f32>,
@@ -250,6 +276,7 @@ impl Renderer for ShapeRenderer {
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_model), false, model_mat.as_slice());
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_view), false, view_mat.as_slice());
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_projection), false, projection_mat.as_slice());
+        gl.uniform3fv_with_f32_array(Some(&self.u_eye), eye.as_slice());
 
         let ambient_light = vec![0.1, 0.1, 0.1];
         gl.uniform3fv_with_f32_array(Some(&self.u_ambient_light), ambient_light.as_slice());
