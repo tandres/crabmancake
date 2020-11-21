@@ -49,6 +49,7 @@ pub struct AppState {
     pub rotation_y_axis: f32,
     pub time: f32,
     pub rotations: [f64; 3],
+    pub limit: f32,
 }
 
 impl AppState {
@@ -67,6 +68,7 @@ impl AppState {
             rotation_y_axis: -0.5,
             time: 0.,
             rotations: [0.; 3],
+            limit: 180.,
         }
     }
 }
@@ -112,6 +114,15 @@ pub fn update_shape_rotation(index: usize, value: f64) {
     rotations[index] = value;
     *data = Arc::new(AppState {
         rotations,
+        ..*data.clone()
+    });
+}
+
+pub fn update_limit(value: f64) {
+    let mut data = APP_STATE.lock().unwrap();
+    let limit = value as f32;
+    *data = Arc::new(AppState {
+        limit,
         ..*data.clone()
     });
 }

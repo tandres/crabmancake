@@ -19,6 +19,13 @@ pub enum Light {
         color: Vector3<f32>,
         location: Vector3<f32>,
     },
+    Spot {
+        color: Vector3<f32>,
+        location: Vector3<f32>,
+        direction: Vector3<f32>,
+        inner_limit: f32,
+        outer_limit: f32,
+    },
 }
 
 impl Light {
@@ -27,6 +34,16 @@ impl Light {
         let color = Vector3::new(r, g, b);
         Light::Point {location, color}
     }
+
+    pub fn new_spot(location: [f32; 3], pointing_at: [f32; 3], color: [f32; 3], inner_limit: f32, outer_limit: f32) -> Self {
+        let location = Vector3::from(location);
+        let direction = Vector3::from(pointing_at) - location;
+        let color = Vector3::from(color);
+        let outer_limit = f32::cos(std::f32::consts::PI * outer_limit / 180.);
+        let inner_limit = f32::cos(std::f32::consts::PI * inner_limit / 180.);
+        Light::Spot { location, color, direction, inner_limit, outer_limit }
+    }
+
 }
 
 pub trait Renderer {

@@ -23,8 +23,11 @@ const VERT_SHADER: &str = r#"
     }
 "#;
 const MAX_POINT_LIGHTS: usize = 10;
+const MAX_SPOT_LIGHTS: usize = 10;
 const FRAG_SHADER: &str = r#"
     #define MAX_POINT_LIGHTS 10
+    #define MAX_SPOT_LIGHTS 10
+
     precision mediump float;
     varying vec3 vNormal;
     varying vec3 vFragLoc;
@@ -38,6 +41,15 @@ const FRAG_SHADER: &str = r#"
     };
     uniform PointLight point_lights[MAX_POINT_LIGHTS];
 
+    struct SpotLight {
+        vec3 color;
+        vec3 location;
+        vec3 direction;
+        float inner_limit;
+        float outer_limit;
+    };
+    uniform SpotLight spot_lights[MAX_SPOT_LIGHTS];
+
     void main() {
         vec3 normal = normalize(vNormal);
 
@@ -46,6 +58,14 @@ const FRAG_SHADER: &str = r#"
             vec3 dirLightVector = normalize(point_lights[i].location - vFragLoc);
             float directional = max(dot(normal, dirLightVector), 0.0);
             lighting += directional * point_lights[i].color;
+        }
+
+        for(int j = 0; j < MAX_SPOT_LIGHTS; j++) {
+            vec3 dirLightVector = normalize(spot_lights[j].location - vFragLoc);
+            float dotFromDirection = dot(dirLightVector, normalize(-spot_lights[j].direction));
+            float inLight = smoothstep(spot_lights[j].outer_limit, spot_lights[j].inner_limit, dotFromDirection);
+            float directional = inLight * max(dot(normal, dirLightVector), 0.0);
+            lighting += directional * spot_lights[j].color;
         }
 
         gl_FragColor = uColor * vec4(lighting, 1.0);
@@ -69,6 +89,35 @@ impl PointLight {
     }
 }
 
+pub struct SpotLight {
+    color: WebGlUniformLocation,
+    location: WebGlUniformLocation,
+    direction: WebGlUniformLocation,
+    inner_limit: WebGlUniformLocation,
+    outer_limit: WebGlUniformLocation,
+}
+
+impl SpotLight {
+    fn new_at_index(gl: &WebGlRenderingContext, program: &WebGlProgram, array_name: &str, index: usize) -> CmcResult<Self> {
+        let color_name = format!("{}[{}].color", array_name, index);
+        let location_name = format!("{}[{}].location", array_name, index);
+        let direction_name = format!("{}[{}].direction", array_name, index);
+        let inner_limit_name = format!("{}[{}].inner_limit", array_name, index);
+        let outer_limit_name = format!("{}[{}].outer_limit", array_name, index);
+        let color = gl.get_uniform_location(program, color_name.as_str())
+            .ok_or(CmcError::missing_val(color_name))?;
+        let location = gl.get_uniform_location(program, location_name.as_str())
+            .ok_or(CmcError::missing_val(location_name))?;
+        let direction = gl.get_uniform_location(program, direction_name.as_str())
+            .ok_or(CmcError::missing_val(direction_name))?;
+        let inner_limit = gl.get_uniform_location(program, inner_limit_name.as_str())
+            .ok_or(CmcError::missing_val(inner_limit_name))?;
+        let outer_limit = gl.get_uniform_location(program, outer_limit_name.as_str())
+            .ok_or(CmcError::missing_val(outer_limit_name))?;
+        Ok(Self { color, location, inner_limit, outer_limit, direction})
+    }
+}
+
 pub struct ShapeRenderer {
     pub name: String,
     program: WebGlProgram,
@@ -82,6 +131,7 @@ pub struct ShapeRenderer {
     u_projection: WebGlUniformLocation,
     u_ambient_light: WebGlUniformLocation,
     point_lights: Vec<PointLight>,
+    spot_lights: Vec<SpotLight>,
 }
 
 impl ShapeRenderer {
@@ -144,6 +194,10 @@ impl ShapeRenderer {
         for i in 0..MAX_POINT_LIGHTS {
             point_lights.push(PointLight::new_at_index(gl, &program, "point_lights", i)?);
         }
+        let mut spot_lights: Vec<SpotLight> = Vec::new();
+        for i in 0..MAX_SPOT_LIGHTS {
+            spot_lights.push(SpotLight::new_at_index(gl, &program, "spot_lights", i)?);
+        }
         Ok(ShapeRenderer {
             name: name.clone(),
             program,
@@ -157,6 +211,7 @@ impl ShapeRenderer {
             u_projection,
             u_ambient_light,
             point_lights,
+            spot_lights,
         })
     }
 }
@@ -196,7 +251,7 @@ impl Renderer for ShapeRenderer {
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_view), false, view_mat.as_slice());
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_projection), false, projection_mat.as_slice());
 
-        let ambient_light = vec![0., 0., 0.1];
+        let ambient_light = vec![0.1, 0.1, 0.1];
         gl.uniform3fv_with_f32_array(Some(&self.u_ambient_light), ambient_light.as_slice());
         for (index, light) in lights.iter().enumerate() {
             match light {
@@ -205,6 +260,18 @@ impl Renderer for ShapeRenderer {
                     let location_location = &self.point_lights[index].location;
                     gl.uniform3fv_with_f32_array(Some(color_location), color.as_slice());
                     gl.uniform3fv_with_f32_array(Some(location_location), location.as_slice());
+                },
+                Light::Spot{ color, location, direction, inner_limit, outer_limit } => {
+                    let color_location = &self.spot_lights[index].color;
+                    let location_location = &self.spot_lights[index].location;
+                    let direction_location = &self.spot_lights[index].direction;
+                    let inner_limit_location = &self.spot_lights[index].inner_limit;
+                    let outer_limit_location = &self.spot_lights[index].outer_limit;
+                    gl.uniform3fv_with_f32_array(Some(color_location), color.as_slice());
+                    gl.uniform3fv_with_f32_array(Some(location_location), location.as_slice());
+                    gl.uniform3fv_with_f32_array(Some(direction_location), direction.as_slice());
+                    gl.uniform1f(Some(inner_limit_location), *inner_limit);
+                    gl.uniform1f(Some(outer_limit_location), *outer_limit);
                 },
             }
         }

@@ -45,6 +45,10 @@ impl CmcClient {
         body.append_child(&label)?;
         body.append_child(&slider)?;
 
+        let (label, slider) = create_slider(&document, "Spot limit", 0.0..360.0, 180.0, |x| state::update_limit(x))?;
+        body.append_child(&label)?;
+        body.append_child(&slider)?;
+
         let gl = setup_gl_context(&document, true)?;
         let rendercache = render::build_rendercache(&gl, &MODEL_DIR).expect("Failed to create rendercache");
         let mut shapes = Vec::new();
@@ -92,9 +96,8 @@ impl CmcClient {
 
         let projection = Perspective3::new(aspect, FIELD_OF_VIEW, Z_NEAR, Z_FAR);
         let lights = vec![
-            Light::new_point(-10., 0., 0., 1., 0., 0.),
-            Light::new_point(10., 0., 0., 0., 1., 0.),
-            Light::new_point(0., 10., 0., 0., 0., 1.),
+            //Light::new_point(-10., 0., 0., 1., 0., 0.),
+            Light::new_spot([2., 2., 2.], [0.,0.,0.], [1.,1.,1.], state.limit, state.limit + 10.),
         ];
         for shape in self.shapes.iter() {
             shape.render(&self.web_gl, &view, &projection, &lights)
