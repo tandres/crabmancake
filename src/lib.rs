@@ -1,5 +1,5 @@
-use crate::{entity::Entity, shape::Shape, error::CmcError, render::{RenderCache, ShapeRenderer}};
-use log::{info, trace};
+use crate::{entity::Entity, shape::Shape, error::CmcError, render::{RenderCache, ShapeRenderer, Light}};
+use log::{trace, debug};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::*;
@@ -45,11 +45,35 @@ impl CmcClient {
         body.append_child(&label)?;
         body.append_child(&slider)?;
 
-        let gl = setup_gl_context(&document)?;
+        let (label, slider) = create_slider(&document, "Spot limit", 0.0..180.0, 90.0, |x| state::update_limit(x))?;
+        body.append_child(&label)?;
+        body.append_child(&slider)?;
+
+        let (label, slider) = create_slider(&document, "X", -10.0..10.0, 0.0, |x| state::update_light_location(0, x))?;
+        body.append_child(&label)?;
+        body.append_child(&slider)?;
+
+        let (label, slider) = create_slider(&document, "Y", -10.0..10.0, 0.0, |x| state::update_light_location(1, x))?;
+        body.append_child(&label)?;
+        body.append_child(&slider)?;
+
+        let (label, slider) = create_slider(&document, "Z", -10.0..10.0, 0.0, |x| state::update_light_location(2, x))?;
+        body.append_child(&label)?;
+        body.append_child(&slider)?;
+
+        let gl = setup_gl_context(&document, true)?;
         let rendercache = render::build_rendercache(&gl, &MODEL_DIR).expect("Failed to create rendercache");
+        log::info!("Available shapes");
+        for key in rendercache.shape_renderers.keys() {
+            log::info!("{}", key);
+        }
         let mut shapes = Vec::new();
+        let entity = Entity::new_at(Vector3::new(10.,0.,0.));
+        let cube_renderer = rendercache.get_shaperenderer("Cube_glb").expect("Failed to get renderer");
+        shapes.push(Shape::new(cube_renderer, entity));
+
         let entity = Entity::new_at(Vector3::new(0.,0.,0.));
-        let cube_renderer = rendercache.get_shaperenderer("Suzanne_glb").expect("Failed to get renderer");
+        let cube_renderer = rendercache.get_shaperenderer("Sphere_glb").expect("Failed to get renderer");
         shapes.push(Shape::new(cube_renderer, entity));
         let client = CmcClient {
             web_gl: gl,
@@ -57,10 +81,6 @@ impl CmcClient {
             shapes,
         };
         Ok(client)
-    }
-
-    pub fn say_hello(&self) {
-        info!("Hello from wasm-rust!");
     }
 
     pub fn update(&mut self, elapsed_time: f32, height: f32, width: f32) -> Result<(), JsValue> {
@@ -89,18 +109,23 @@ impl CmcClient {
         pub const FIELD_OF_VIEW: f32 = 45. * std::f32::consts::PI / 180.; //in radians
         pub const Z_FAR: f32 = 1000.;
         pub const Z_NEAR: f32 = 1.0;
-        let eye    = eye_rot * Point3::new(-3.0, 5.0, -3.0);
+        let eye   = eye_rot * Point3::new(3.0, 2.0, 3.0);
 
         let target = Point3::new(0.0, 0.0, 0.0);
         let view   = Isometry3::look_at_rh(&eye, &target, &Vector3::y());
 
         let projection = Perspective3::new(aspect, FIELD_OF_VIEW, Z_NEAR, Z_FAR);
+        let attenuator = [1.0, 0.7, 1.8];
+        let light_location = state.light_location.clone();
+        let lights = vec![
+            Light::new_point(light_location, [1., 1., 1.], 5.0, attenuator.clone()),
+            Light::new_spot([-5., 0., 0.], [0.,0.,0.], [0.5,0.5,0.5], state.limit, state.limit + 1., 1.0, attenuator.clone()),
+        ];
         for shape in self.shapes.iter() {
-            shape.render(&self.web_gl, &view, &projection)
+            shape.render(&self.web_gl, &view, &Vector3::new(eye.x, eye.y, eye.z), &projection, &lights)
         }
     }
 }
-
 
 #[wasm_bindgen]
 pub fn cmc_init() {
@@ -109,10 +134,16 @@ pub fn cmc_init() {
     trace!("Info:\n Git version: {}", GIT_VERSION);
 }
 
-fn setup_gl_context(doc: &Document) -> Result<web_sys::WebGlRenderingContext, JsValue> {
+fn setup_gl_context(doc: &Document, print_context_info: bool) -> Result<web_sys::WebGlRenderingContext, JsValue> {
     let canvas = doc.get_element_by_id("rustCanvas").ok_or(CmcError::missing_val("rustCanvas"))?;
     let canvas: HtmlCanvasElement = canvas.dyn_into::<HtmlCanvasElement>()?;
     let context: web_sys::WebGlRenderingContext = canvas.get_context("webgl")?.ok_or(JsValue::from_str("Failed to get webgl context"))?.dyn_into()?;
+
+    if print_context_info {
+        debug!("Max Vertex Attributes: {}", WebGL::MAX_VERTEX_ATTRIBS);
+        debug!("Max Vertex Uniform vectors: {}", WebGL::MAX_VERTEX_UNIFORM_VECTORS);
+        debug!("Max Fragment Uniform vectors: {}", WebGL::MAX_FRAGMENT_UNIFORM_VECTORS);
+    }
 
     attach_mouse_down_handler(&canvas)?;
     attach_mouse_up_handler(&canvas)?;

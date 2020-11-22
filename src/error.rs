@@ -1,6 +1,5 @@
 use thiserror::Error;
 use wasm_bindgen::JsValue;
-use wavefront_obj::ParseError;
 
 pub type CmcResult<T> = Result<T, CmcError>;
 
@@ -20,11 +19,6 @@ pub enum CmcError {
     JsValue {
         jsvalue: JsValue,
         description: String,
-    },
-    #[error("WavefrontObj Parse Error: {error}")]
-    WavefrontObjParse {
-        #[from]
-        error: ParseError,
     },
     #[error("Gltf error: {error}")]
     Gltf {

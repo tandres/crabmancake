@@ -1,5 +1,5 @@
-use crate::{render::Renderer, entity::Entity};
-use nalgebra::{Isometry3, Perspective3};
+use crate::{render::{Light, Renderer}, entity::Entity};
+use nalgebra::{Isometry3, Perspective3, Vector3};
 use web_sys::WebGlRenderingContext;
 use std::rc::Rc;
 
@@ -23,8 +23,8 @@ where
         Self { renderer, entity }
     }
 
-    pub fn render(&self, gl: &WebGlRenderingContext, view: &Isometry3<f32>, projection: &Perspective3<f32>) {
-        self.renderer.render(gl, view, projection, &self.entity.location, &self.entity.rotation)
+    pub fn render(&self, gl: &WebGlRenderingContext, view: &Isometry3<f32>, eye: &Vector3<f32>, projection: &Perspective3<f32>, lights: &Vec<Light>) {
+        self.renderer.render(gl, view, eye, projection, &self.entity.location, &self.entity.rotation, lights)
     }
 
 

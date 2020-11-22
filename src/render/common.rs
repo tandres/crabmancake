@@ -1,7 +1,6 @@
 use crate::error::{CmcError, CmcResult};
 use web_sys::WebGlRenderingContext as WebGL;
 use web_sys::*;
-use wavefront_obj::obj::Vertex;
 
 pub fn compile_shader(
     gl: &WebGlRenderingContext,
@@ -44,16 +43,3 @@ pub fn build_program(gl: &WebGlRenderingContext, vert_shader: &str, frag_shader:
     Ok(program)
 }
 
-pub struct CmcVertex(Vertex);
-
-impl From<&Vertex> for CmcVertex {
-    fn from(vertex: &Vertex) -> CmcVertex {
-        CmcVertex(vertex.clone())
-    }
-}
-
-impl From<CmcVertex> for Vec<f32>{
-    fn from(vertex: CmcVertex) -> Vec<f32> {
-        vec![vertex.0.x as f32, vertex.0.y as f32, vertex.0.z as f32]
-    }
-}

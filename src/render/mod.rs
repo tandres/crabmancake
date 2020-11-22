@@ -1,11 +1,10 @@
 use crate::error::{CmcResult, CmcError};
-use log::{error, trace, warn};
+use log::{error, warn};
 use nalgebra::{Isometry3, Perspective3, Vector3};
 use std::{collections::HashMap, rc::Rc};
 use web_sys::*;
 use include_dir::Dir;
-use wavefront_obj::obj::{Object, parse, Primitive};
-use gltf::{mesh::{util::ReadIndices, Mesh, Semantic}, buffer::Data, Gltf, iter::Buffers};
+use gltf::{mesh::Mesh, buffer::Data};
 
 mod simple;
 mod shape;
@@ -13,18 +12,59 @@ mod common;
 
 pub use simple::SimpleRenderer;
 pub use shape::ShapeRenderer;
-use common::CmcVertex;
+
+
+pub enum Light {
+    Point {
+        color: Vector3<f32>,
+        location: Vector3<f32>,
+
+        intensity: f32,
+        attenuator: [f32; 3],
+    },
+    Spot {
+        color: Vector3<f32>,
+        location: Vector3<f32>,
+        direction: Vector3<f32>,
+        inner_limit: f32,
+        outer_limit: f32,
+
+        intensity: f32,
+
+        attenuator: [f32; 3],
+    },
+}
+
+impl Light {
+    pub fn new_point(location: [f32; 3], color: [f32; 3], intensity: f32, attenuator: [f32; 3]) -> Self {
+        let location = Vector3::from(location);
+        let color = Vector3::from(color);
+        Light::Point {location, color, intensity, attenuator}
+    }
+
+    pub fn new_spot(location: [f32; 3], pointing_at: [f32; 3], color: [f32; 3], inner_limit: f32, outer_limit: f32, intensity: f32, attenuator: [f32; 3]) -> Self {
+        let location = Vector3::from(location);
+        let direction = Vector3::from(pointing_at) - location;
+        let color = Vector3::from(color);
+        let outer_limit = f32::cos(std::f32::consts::PI * outer_limit / 180.);
+        let inner_limit = f32::cos(std::f32::consts::PI * inner_limit / 180.);
+        Light::Spot { location, color, direction, inner_limit, outer_limit, intensity, attenuator }
+    }
+
+}
 
 pub trait Renderer {
-    fn render(&self, gl: &WebGlRenderingContext, view: &Isometry3<f32>, projection: &Perspective3<f32>, location: &Vector3<f32>, rotation: &Vector3<f32>);
+    fn render(&self, gl: &WebGlRenderingContext, view: &Isometry3<f32>, eye: &Vector3<f32>, projection: &Perspective3<f32>, location: &Vector3<f32>, rotation: &Vector3<f32>, lights: &Vec<Light>);
 }
 
 pub struct RenderCache {
+    #[allow(unused)]
     simple_renderer: SimpleRenderer,
-    shape_renderers: HashMap<String, Rc<ShapeRenderer>>,
+    pub shape_renderers: HashMap<String, Rc<ShapeRenderer>>,
 }
 
 impl RenderCache {
+    #[allow(unused)]
     pub fn add_shaperenderer<S: AsRef<str>>(&mut self, type_name: S, renderer: ShapeRenderer) {
         let renderer = Rc::new(renderer);
         if let Some(_) = self.shape_renderers.insert(type_name.as_ref().to_string(), renderer) {
@@ -42,22 +82,12 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, model_dir: &Dir) -> CmcResu
     let simple_renderer = SimpleRenderer::new(gl)?;
     for file in model_dir.files().iter() {
         let path = file.path();
-        trace!("{} extension: {:?}", path.display(), path.extension());
+        // trace!("{} extension: {:?}", path.display(), path.extension());
         if let Some(ext) = path.extension() {
             match ext.to_str() {
-                Some("obj") => {
-                    if let Some(contents) = file.contents_utf8() {
-                        for obj in parse(contents.to_string())?.objects.iter() {
-                            let (obj_name, renderer) = build_renderer_wav(gl, obj)?;
-                            if let Some(old) = shape_renderers.insert(obj_name, Rc::new(renderer)) {
-                                warn!("Replaced renderer: {}", old.name);
-                            }
-                        }
-                    }
-                }
                 Some("glb") => {
                     let (gltf, buffers, images) = gltf::import_slice(file.contents())?;
-                    trace!("Gltf contents: {:?}", gltf);
+                    // trace!("Gltf contents: {:?}", gltf);
                     for mesh in gltf.meshes() {
                         let (obj_name, renderer) = build_renderer_glb(gl, &mesh, &buffers, &images)?;
                         if let Some(old) = shape_renderers.insert(obj_name, Rc::new(renderer)) {
@@ -70,99 +100,55 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, model_dir: &Dir) -> CmcResu
             }
         }
     }
-    let test_triangle = ShapeRenderer::new(
-        &"test_triangle".to_string(),
-        gl,
-        vec![1.,1.,0.,-1.,1.,0.,-1.,-1.,0.],
-        vec![0, 1, 2],
-        vec![0.,0.,-1.,0.,0.,-1.,0.,0.,-1.])?;
-    shape_renderers.insert("test_triangle".to_string(), Rc::new(test_triangle));
+    let (name, renderer) = build_test_triangle(gl)?;
+    shape_renderers.insert(name, Rc::new(renderer));
     Ok(RenderCache {
         simple_renderer,
         shape_renderers,
     })
 }
 
+fn build_test_triangle(gl: &WebGlRenderingContext) -> CmcResult<(String, ShapeRenderer)> {
+    let test_triangle = ShapeRenderer::new(
+        &"test_triangle".to_string(),
+        gl,
+        vec![1.,1.,0.,-1.,1.,0.,-1.,-1.,0.],
+        vec![0, 1, 2],
+        vec![0.,0.,-1.,0.,0.,-1.,0.,0.,-1.])?;
+    Ok(("test_triangle".to_string(), test_triangle))
+}
+
 fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<Data>, _images: &Vec<gltf::image::Data>) -> CmcResult<(String, ShapeRenderer)> {
     let name = object.name().ok_or(CmcError::missing_val("Glb mesh name")).unwrap();
     let name = format!("{}_{}", name, "glb");
-    trace!("Name: {}", name);
+    // trace!("Name: {}", name);
     let mut out_vertices = Vec::new();
     let mut out_indices = Vec::new();
     let mut out_normals = Vec::new();
     for prim in object.primitives() {
-        trace!("Mode: {:?}", prim.mode());
+        // trace!("Mode: {:?}", prim.mode());
         let reader = prim.reader(|buffer| Some(&buffers[buffer.index()]));
         if let Some(positions) = reader.read_positions() {
             for position in positions {
-                trace!("Positions: {:?}", position);
+                // trace!("Positions: {:?}", position);
                 out_vertices.extend_from_slice(&position);
             }
         }
         if let Some(indices) = reader.read_indices() {
             for index in indices.into_u32() {
-                trace!("Index: {:?}", index);
+                // trace!("Index: {:?}", index);
                 out_indices.push(index as u16);
             }
         }
         if let Some(normals) = reader.read_normals() {
             for normal in normals {
-                trace!("Normal: {:?}", normal);
+                // trace!("Normal: {:?}", normal);
                 out_normals.extend_from_slice(&normal);
             }
         }
     }
-    trace!("Indices: {} Vertices: {} Normals: {}", out_indices.len(), out_vertices.len(), out_normals.len());
+    // trace!("Indices: {} Vertices: {} Normals: {}", out_indices.len(), out_vertices.len(), out_normals.len());
     let renderer = ShapeRenderer::new(&name, gl, out_vertices, out_indices, out_normals)?;
     Ok((name, renderer))
 }
 
-fn build_renderer_wav(gl: &WebGlRenderingContext, object: &Object) -> CmcResult<(String, ShapeRenderer)> {
-    let name = format!("{}_{}", object.name, "wav");
-    let mut vertices: Vec<f32> = Vec::new();
-    for vert in object.vertices.iter() {
-        vertices.push(vert.x as f32);
-        vertices.push(vert.y as f32);
-        vertices.push(vert.z as f32);
-    }
-
-    // trace!("Object name: {}", object.name);
-    // trace!("Vertices: {:?}", object.vertices.len());
-    // trace!("Geometries: {:?}", object.geometry.len());
-    // for geo in object.geometry.iter() {
-    //     trace!("Geometry: {:#?}", geo);
-    // }
-    // trace!("Final vertice count {}", vertices.len());
-    let mut indices: Vec<u16> = Vec::new();
-    let mut normals: Vec<f32> = Vec::new();
-    for geo in object.geometry.iter() {
-        for shape in geo.shapes.iter() {
-            match shape.primitive {
-                Primitive::Triangle(a, b, c) => {
-                    trace!("Prim: {:?}", shape.primitive);
-                    let missing_index = "missing normal index";
-                    let out_of_range = "Normal index out of range!";
-                    indices.push(a.0 as u16);
-                    indices.push(b.0 as u16);
-                    indices.push(c.0 as u16);
-                    let index = a.2.ok_or(CmcError::missing_val(missing_index))?;
-                    let normal = object.normals.get(index).ok_or(CmcError::missing_val(out_of_range))?;
-                    normals.append(&mut CmcVertex::from(normal).into());
-                    trace!("Triangle: A: {}({:?}) -> {}({:?})", a.0, object.vertices[a.0], index, normal);
-                    let index = b.2.ok_or(CmcError::missing_val(missing_index))?;
-                    let normal = object.normals.get(index).ok_or(CmcError::missing_val(out_of_range))?;
-                    normals.append(&mut CmcVertex::from(normal).into());
-                    trace!("          B: {}({:?}) -> {}({:?})", b.0, object.vertices[b.0], index, normal);
-                    let index = c.2.ok_or(CmcError::missing_val(missing_index))?;
-                    let normal = object.normals.get(index).ok_or(CmcError::missing_val(out_of_range))?;
-                    normals.append(&mut CmcVertex::from(normal).into());
-                    trace!("          C: {}({:?}) -> {}({:?})", c.0, object.vertices[c.0], index, normal);
-                },
-                _ => warn!("Unsupported primitive type!"),
-            }
-        }
-    }
-
-    let renderer = ShapeRenderer::new(&name, gl, vertices, indices, normals)?;
-    Ok((name, renderer))
-}

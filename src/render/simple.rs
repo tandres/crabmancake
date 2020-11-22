@@ -1,4 +1,4 @@
-use crate::{render::Renderer, error::{CmcError, CmcResult}};
+use crate::{render::{Renderer, Light}, error::{CmcError, CmcResult}};
 use super::common::build_program;
 use js_sys::WebAssembly;
 use nalgebra::{Isometry3, Perspective3, Vector3};
@@ -92,9 +92,11 @@ impl Renderer for SimpleRenderer {
         &self,
         gl: &WebGlRenderingContext,
         view: &Isometry3<f32>,
+        _eye: &Vector3<f32>,
         projection: &Perspective3<f32>,
         location: &Vector3<f32>,
         rotation: &Vector3<f32>,
+        _lights: &Vec<Light>,
     ) {
         gl.use_program(Some(&self.program));
 
