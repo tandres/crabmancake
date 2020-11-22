@@ -39,6 +39,10 @@ const FRAG_SHADER: &str = r#"
     struct PointLight {
         vec3 color;
         vec3 location;
+
+        float intensity;
+
+        vec3 attenuator;
     };
     uniform PointLight point_lights[MAX_POINT_LIGHTS];
 
@@ -48,6 +52,10 @@ const FRAG_SHADER: &str = r#"
         vec3 direction;
         float inner_limit;
         float outer_limit;
+
+        float intensity;
+
+        vec3 attenuator;
     };
     uniform SpotLight spot_lights[MAX_SPOT_LIGHTS];
 
@@ -59,6 +67,8 @@ const FRAG_SHADER: &str = r#"
         for(int i = 0; i < MAX_POINT_LIGHTS; i++) {
             vec3 light_location = point_lights[i].location;
             vec3 light_color = point_lights[i].color;
+            vec3 attenuator = point_lights[i].attenuator;
+            float intensity = point_lights[i].intensity;
 
             vec3 fragment_to_light = normalize(light_location - vFragLoc);
             float diffuse_directional = max(dot(normal, fragment_to_light), 0.0);
@@ -68,7 +78,10 @@ const FRAG_SHADER: &str = r#"
                 float viewable_reflection = dot(normal, half_vector);
                 specular = pow(max(viewable_reflection, 0.0), 32.0);
             }
-            lighting += (diffuse_directional + specular) * light_color;
+            float distance    = length(light_location - vFragLoc);
+            float attenuation = max(1.0, intensity) / (1.0 + attenuator.y * distance +
+    		    attenuator.z * (distance * distance));
+            lighting += (diffuse_directional + specular) * light_color * attenuation;
         }
 
         for(int j = 0; j < MAX_SPOT_LIGHTS; j++) {
@@ -77,6 +90,8 @@ const FRAG_SHADER: &str = r#"
             vec3 light_color = spot_lights[j].color;
             float outer_limit = spot_lights[j].outer_limit;
             float inner_limit = spot_lights[j].inner_limit;
+            vec3 attenuator = spot_lights[j].attenuator;
+            float intensity = spot_lights[j].intensity;
 
             vec3 fragment_to_light = normalize(light_location - vFragLoc);
             float dot_f2l_ldir = dot(fragment_to_light, normalize(-light_direction));
@@ -88,7 +103,10 @@ const FRAG_SHADER: &str = r#"
                 float viewable_reflection = dot(normal, half_vector);
                 specular = pow(max(viewable_reflection, 0.0), 32.0);
             }
-            lighting += (diffuse_directional + specular) * spot_lights[j].color;
+            float distance    = length(light_location - vFragLoc);
+            float attenuation = max(1.0, intensity) / (1.0 + attenuator.y * distance +
+    		    attenuator.z * (distance * distance));
+            lighting += (diffuse_directional + specular) * spot_lights[j].color * attenuation;
         }
 
         gl_FragColor = uColor * vec4(lighting, 1.0);
@@ -98,17 +116,25 @@ const FRAG_SHADER: &str = r#"
 pub struct PointLight {
     color: WebGlUniformLocation,
     location: WebGlUniformLocation,
+    intensity: WebGlUniformLocation,
+    attenuator: WebGlUniformLocation,
 }
 
 impl PointLight {
     fn new_at_index(gl: &WebGlRenderingContext, program: &WebGlProgram, array_name: &str, index: usize) -> CmcResult<Self> {
         let color_name = format!("{}[{}].color", array_name, index);
         let location_name = format!("{}[{}].location", array_name, index);
+        let intensity_name = format!("{}[{}].intensity", array_name, index);
+        let attenuator_name = format!("{}[{}].attenuator", array_name, index);
         let color = gl.get_uniform_location(program, color_name.as_str())
             .ok_or(CmcError::missing_val(color_name))?;
         let location = gl.get_uniform_location(program, location_name.as_str())
             .ok_or(CmcError::missing_val(location_name))?;
-        Ok(Self { color, location })
+        let intensity = gl.get_uniform_location(program, intensity_name.as_str())
+            .ok_or(CmcError::missing_val(intensity_name))?;
+        let attenuator = gl.get_uniform_location(program, attenuator_name.as_str())
+            .ok_or(CmcError::missing_val(attenuator_name))?;
+        Ok(Self { color, location, intensity, attenuator })
     }
 }
 
@@ -118,6 +144,8 @@ pub struct SpotLight {
     direction: WebGlUniformLocation,
     inner_limit: WebGlUniformLocation,
     outer_limit: WebGlUniformLocation,
+    intensity: WebGlUniformLocation,
+    attenuator: WebGlUniformLocation,
 }
 
 impl SpotLight {
@@ -127,6 +155,8 @@ impl SpotLight {
         let direction_name = format!("{}[{}].direction", array_name, index);
         let inner_limit_name = format!("{}[{}].inner_limit", array_name, index);
         let outer_limit_name = format!("{}[{}].outer_limit", array_name, index);
+        let intensity_name = format!("{}[{}].intensity", array_name, index);
+        let attenuator_name = format!("{}[{}].attenuator", array_name, index);
         let color = gl.get_uniform_location(program, color_name.as_str())
             .ok_or(CmcError::missing_val(color_name))?;
         let location = gl.get_uniform_location(program, location_name.as_str())
@@ -137,7 +167,11 @@ impl SpotLight {
             .ok_or(CmcError::missing_val(inner_limit_name))?;
         let outer_limit = gl.get_uniform_location(program, outer_limit_name.as_str())
             .ok_or(CmcError::missing_val(outer_limit_name))?;
-        Ok(Self { color, location, inner_limit, outer_limit, direction})
+        let intensity = gl.get_uniform_location(program, intensity_name.as_str())
+            .ok_or(CmcError::missing_val(intensity_name))?;
+        let attenuator = gl.get_uniform_location(program, attenuator_name.as_str())
+            .ok_or(CmcError::missing_val(attenuator_name))?;
+        Ok(Self { color, location, inner_limit, outer_limit, direction, intensity, attenuator})
     }
 }
 
@@ -282,23 +316,31 @@ impl Renderer for ShapeRenderer {
         gl.uniform3fv_with_f32_array(Some(&self.u_ambient_light), ambient_light.as_slice());
         for (index, light) in lights.iter().enumerate() {
             match light {
-                Light::Point{ color, location } => {
+                Light::Point{ color, location, intensity, attenuator } => {
                     let color_location = &self.point_lights[index].color;
                     let location_location = &self.point_lights[index].location;
+                    let intensity_location = &self.point_lights[index].intensity;
+                    let attenuator_location = &self.point_lights[index].attenuator;
                     gl.uniform3fv_with_f32_array(Some(color_location), color.as_slice());
                     gl.uniform3fv_with_f32_array(Some(location_location), location.as_slice());
+                    gl.uniform1f(Some(intensity_location), *intensity);
+                    gl.uniform3fv_with_f32_array(Some(attenuator_location), &attenuator[..]);
                 },
-                Light::Spot{ color, location, direction, inner_limit, outer_limit } => {
+                Light::Spot{ color, location, direction, inner_limit, outer_limit, intensity, attenuator } => {
                     let color_location = &self.spot_lights[index].color;
                     let location_location = &self.spot_lights[index].location;
                     let direction_location = &self.spot_lights[index].direction;
                     let inner_limit_location = &self.spot_lights[index].inner_limit;
                     let outer_limit_location = &self.spot_lights[index].outer_limit;
+                    let intensity_location = &self.spot_lights[index].intensity;
+                    let attenuator_location = &self.spot_lights[index].attenuator;
                     gl.uniform3fv_with_f32_array(Some(color_location), color.as_slice());
                     gl.uniform3fv_with_f32_array(Some(location_location), location.as_slice());
                     gl.uniform3fv_with_f32_array(Some(direction_location), direction.as_slice());
                     gl.uniform1f(Some(inner_limit_location), *inner_limit);
                     gl.uniform1f(Some(outer_limit_location), *outer_limit);
+                    gl.uniform1f(Some(intensity_location), *intensity);
+                    gl.uniform3fv_with_f32_array(Some(attenuator_location), &attenuator[..]);
                 },
             }
         }

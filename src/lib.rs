@@ -49,6 +49,18 @@ impl CmcClient {
         body.append_child(&label)?;
         body.append_child(&slider)?;
 
+        let (label, slider) = create_slider(&document, "X", -10.0..10.0, 0.0, |x| state::update_light_location(0, x))?;
+        body.append_child(&label)?;
+        body.append_child(&slider)?;
+
+        let (label, slider) = create_slider(&document, "Y", -10.0..10.0, 0.0, |x| state::update_light_location(1, x))?;
+        body.append_child(&label)?;
+        body.append_child(&slider)?;
+
+        let (label, slider) = create_slider(&document, "Z", -10.0..10.0, 0.0, |x| state::update_light_location(2, x))?;
+        body.append_child(&label)?;
+        body.append_child(&slider)?;
+
         let gl = setup_gl_context(&document, true)?;
         let rendercache = render::build_rendercache(&gl, &MODEL_DIR).expect("Failed to create rendercache");
         log::info!("Available shapes");
@@ -103,9 +115,11 @@ impl CmcClient {
         let view   = Isometry3::look_at_rh(&eye, &target, &Vector3::y());
 
         let projection = Perspective3::new(aspect, FIELD_OF_VIEW, Z_NEAR, Z_FAR);
+        let attenuator = [1.0, 0.7, 1.8];
+        let light_location = state.light_location.clone();
         let lights = vec![
-            Light::new_point(10., 0., 0., 0.5, 0.5, 0.5),
-           Light::new_spot([-5., 0., 0.], [0.,0.,0.], [0.5,0.5,0.5], state.limit, state.limit + 1.),
+            Light::new_point(light_location, [1., 1., 1.], 5.0, attenuator.clone()),
+            Light::new_spot([-5., 0., 0.], [0.,0.,0.], [0.5,0.5,0.5], state.limit, state.limit + 1., 1.0, attenuator.clone()),
         ];
         for shape in self.shapes.iter() {
             shape.render(&self.web_gl, &view, &Vector3::new(eye.x, eye.y, eye.z), &projection, &lights)

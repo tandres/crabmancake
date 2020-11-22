@@ -50,6 +50,7 @@ pub struct AppState {
     pub time: f32,
     pub rotations: [f64; 3],
     pub limit: f32,
+    pub light_location: [f32; 3],
 }
 
 impl AppState {
@@ -69,6 +70,7 @@ impl AppState {
             time: 0.,
             rotations: [0.; 3],
             limit: 175.,
+            light_location: [0.;3],
         }
     }
 }
@@ -123,6 +125,16 @@ pub fn update_limit(value: f64) {
     let limit = value as f32;
     *data = Arc::new(AppState {
         limit,
+        ..*data.clone()
+    });
+}
+
+pub fn update_light_location(index: usize, value: f64) {
+    let mut data = APP_STATE.lock().unwrap();
+    let mut light_location = data.light_location.clone();
+    light_location[index] = value as f32;
+    *data = Arc::new(AppState {
+        light_location,
         ..*data.clone()
     });
 }

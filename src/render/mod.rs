@@ -18,6 +18,9 @@ pub enum Light {
     Point {
         color: Vector3<f32>,
         location: Vector3<f32>,
+
+        intensity: f32,
+        attenuator: [f32; 3],
     },
     Spot {
         color: Vector3<f32>,
@@ -25,23 +28,27 @@ pub enum Light {
         direction: Vector3<f32>,
         inner_limit: f32,
         outer_limit: f32,
+
+        intensity: f32,
+
+        attenuator: [f32; 3],
     },
 }
 
 impl Light {
-    pub fn new_point(x: f32, y: f32, z: f32, r: f32, g: f32, b: f32) -> Self {
-        let location = Vector3::new(x, y, z);
-        let color = Vector3::new(r, g, b);
-        Light::Point {location, color}
+    pub fn new_point(location: [f32; 3], color: [f32; 3], intensity: f32, attenuator: [f32; 3]) -> Self {
+        let location = Vector3::from(location);
+        let color = Vector3::from(color);
+        Light::Point {location, color, intensity, attenuator}
     }
 
-    pub fn new_spot(location: [f32; 3], pointing_at: [f32; 3], color: [f32; 3], inner_limit: f32, outer_limit: f32) -> Self {
+    pub fn new_spot(location: [f32; 3], pointing_at: [f32; 3], color: [f32; 3], inner_limit: f32, outer_limit: f32, intensity: f32, attenuator: [f32; 3]) -> Self {
         let location = Vector3::from(location);
         let direction = Vector3::from(pointing_at) - location;
         let color = Vector3::from(color);
         let outer_limit = f32::cos(std::f32::consts::PI * outer_limit / 180.);
         let inner_limit = f32::cos(std::f32::consts::PI * inner_limit / 180.);
-        Light::Spot { location, color, direction, inner_limit, outer_limit }
+        Light::Spot { location, color, direction, inner_limit, outer_limit, intensity, attenuator }
     }
 
 }
