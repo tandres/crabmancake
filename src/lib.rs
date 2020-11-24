@@ -53,7 +53,7 @@ impl CmcClient {
         body.append_child(&label)?;
         body.append_child(&slider)?;
 
-        let (label, slider) = create_slider(&document, "Y", -10.0..10.0, 0.0, |x| state::update_light_location(1, x))?;
+        let (label, slider) = create_slider(&document, "Y", -10.0..10.0, 2.0, |x| state::update_light_location(1, x))?;
         body.append_child(&label)?;
         body.append_child(&slider)?;
 
@@ -73,7 +73,7 @@ impl CmcClient {
         shapes.push(Shape::new(cube_renderer, entity));
 
         let entity = Entity::new_at(Vector3::new(0.,0.,0.));
-        let cube_renderer = rendercache.get_shaperenderer("Sphere_glb").expect("Failed to get renderer");
+        let cube_renderer = rendercache.get_shaperenderer("Cube_glb").expect("Failed to get renderer");
         shapes.push(Shape::new(cube_renderer, entity));
         let client = CmcClient {
             web_gl: gl,

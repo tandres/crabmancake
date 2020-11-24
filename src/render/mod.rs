@@ -4,7 +4,7 @@ use nalgebra::{Isometry3, Perspective3, Vector3};
 use std::{collections::HashMap, rc::Rc};
 use web_sys::*;
 use include_dir::Dir;
-use gltf::{mesh::Mesh, buffer::Data};
+use gltf::{mesh::Mesh, buffer::Data, image::Format};
 
 mod simple;
 mod shape;
@@ -82,11 +82,12 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, model_dir: &Dir) -> CmcResu
     let simple_renderer = SimpleRenderer::new(gl)?;
     for file in model_dir.files().iter() {
         let path = file.path();
-        // trace!("{} extension: {:?}", path.display(), path.extension());
+        log::trace!("{} extension: {:?}", path.display(), path.extension());
         if let Some(ext) = path.extension() {
             match ext.to_str() {
                 Some("glb") => {
                     let (gltf, buffers, images) = gltf::import_slice(file.contents())?;
+                    log::trace!("Gltf loaded, {} buffers and {} images", buffers.len(), images.len());
                     // trace!("Gltf contents: {:?}", gltf);
                     for mesh in gltf.meshes() {
                         let (obj_name, renderer) = build_renderer_glb(gl, &mesh, &buffers, &images)?;
@@ -100,31 +101,36 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, model_dir: &Dir) -> CmcResu
             }
         }
     }
-    let (name, renderer) = build_test_triangle(gl)?;
-    shape_renderers.insert(name, Rc::new(renderer));
+    // let (name, renderer) = build_test_triangle(gl)?;
+    // shape_renderers.insert(name, Rc::new(renderer));
     Ok(RenderCache {
         simple_renderer,
         shape_renderers,
     })
 }
 
-fn build_test_triangle(gl: &WebGlRenderingContext) -> CmcResult<(String, ShapeRenderer)> {
-    let test_triangle = ShapeRenderer::new(
-        &"test_triangle".to_string(),
-        gl,
-        vec![1.,1.,0.,-1.,1.,0.,-1.,-1.,0.],
-        vec![0, 1, 2],
-        vec![0.,0.,-1.,0.,0.,-1.,0.,0.,-1.])?;
-    Ok(("test_triangle".to_string(), test_triangle))
-}
+// fn build_test_triangle(gl: &WebGlRenderingContext) -> CmcResult<(String, ShapeRenderer)> {
+//     let test_triangle = ShapeRenderer::new(
+//         &"test_triangle".to_string(),
+//         gl,
+//         vec![1.,1.,0.,-1.,1.,0.,-1.,-1.,0.],
+//         vec![0, 1, 2],
+//         vec![0.,0.,-1.,0.,0.,-1.,0.,0.,-1.],
+//         vec![1.,1.,0.,-1.,1.,0.,-1.,-1.,0.])?;
+//     Ok(("test_triangle".to_string(), test_triangle))
+// }
 
-fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<Data>, _images: &Vec<gltf::image::Data>) -> CmcResult<(String, ShapeRenderer)> {
+fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<Data>, images: &Vec<gltf::image::Data>) -> CmcResult<(String, ShapeRenderer)> {
     let name = object.name().ok_or(CmcError::missing_val("Glb mesh name")).unwrap();
     let name = format!("{}_{}", name, "glb");
     // trace!("Name: {}", name);
     let mut out_vertices = Vec::new();
     let mut out_indices = Vec::new();
     let mut out_normals = Vec::new();
+    let mut out_tex_coords = Vec::new();
+    let mut out_image = Vec::new();
+    let mut image_width = 0;
+    let mut image_height = 0;
     for prim in object.primitives() {
         // trace!("Mode: {:?}", prim.mode());
         let reader = prim.reader(|buffer| Some(&buffers[buffer.index()]));
@@ -146,9 +152,35 @@ fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<D
                 out_normals.extend_from_slice(&normal);
             }
         }
+        if let Some(texture_coordinates) = reader.read_tex_coords(0) {
+            for coord in texture_coordinates.into_f32() {
+                // log::trace!("Tex Coord: {:?}", coord);
+                out_tex_coords.extend_from_slice(&coord);
+            }
+        }
+        let material = prim.material();
+        if let Some(texture_info) = material.pbr_metallic_roughness().base_color_texture() {
+            let texture = texture_info.texture();
+            let name = texture_info.texture().source().name();
+            log::trace!("Image name: {:?}", name);
+            log::trace!("Image index: {}", texture.index());
+            let image = &images[texture.index()];
+            log::trace!("Image size: {}", image.pixels.len());
+            out_image = image.pixels.clone();
+            image_width = image.width;
+            image_height = image.height;
+            log::trace!("Image format: {:?}", image.format);
+            let format = match image.format {
+                Format::R8G8B8A8 => WebGlRenderingContext::RGBA,
+                _ => {
+                    log::warn!("Format not supported!");
+                    WebGlRenderingContext::RGBA
+                },
+            };
+        }
     }
     // trace!("Indices: {} Vertices: {} Normals: {}", out_indices.len(), out_vertices.len(), out_normals.len());
-    let renderer = ShapeRenderer::new(&name, gl, out_vertices, out_indices, out_normals)?;
+    let renderer = ShapeRenderer::new(&name, gl, out_vertices, out_indices, out_normals, out_tex_coords, out_image, image_width, image_height)?;
     Ok((name, renderer))
 }
 

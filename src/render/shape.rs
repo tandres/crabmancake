@@ -9,12 +9,14 @@ use web_sys::*;
 const VERT_SHADER: &str = r#"
     attribute vec4 aPosition;
     attribute vec3 aNormal;
+    attribute vec2 aTextureCoord;
 
     uniform mat4 uView;
     uniform mat4 uProjection;
     uniform mat4 uModel;
     varying vec3 vNormal;
     varying vec3 vFragLoc;
+    varying vec2 vTextureCoord;
 
     void main() {
         gl_Position = uProjection * ((uView * uModel) * aPosition);
@@ -31,10 +33,11 @@ const FRAG_SHADER: &str = r#"
     precision mediump float;
     varying vec3 vNormal;
     varying vec3 vFragLoc;
+    varying vec2 vTextureCoord;
 
-    uniform vec4 uColor;
     uniform vec3 uAmbientLight;
     uniform vec3 uEyeLocation;
+    uniform sampler2D uTexture;
 
     struct PointLight {
         vec3 color;
@@ -109,7 +112,7 @@ const FRAG_SHADER: &str = r#"
             lighting += (diffuse_directional + specular) * spot_lights[j].color * attenuation;
         }
 
-        gl_FragColor = uColor * vec4(lighting, 1.0);
+        gl_FragColor = texture2D(uTexture, vTextureCoord) * vec4(lighting, 1.0);
     }
 "#;
 
@@ -180,9 +183,10 @@ pub struct ShapeRenderer {
     program: WebGlProgram,
     vertice_buffer: WebGlBuffer,
     normals_buffer: WebGlBuffer,
+    texture_coord_buffer: WebGlBuffer,
     index_buffer: WebGlBuffer,
     index_count: i32,
-    u_color: WebGlUniformLocation,
+    u_texture: WebGlUniformLocation,
     u_model: WebGlUniformLocation,
     u_view: WebGlUniformLocation,
     u_projection: WebGlUniformLocation,
@@ -190,10 +194,11 @@ pub struct ShapeRenderer {
     u_eye: WebGlUniformLocation,
     point_lights: Vec<PointLight>,
     spot_lights: Vec<SpotLight>,
+    texture: WebGlTexture,
 }
 
 impl ShapeRenderer {
-    pub fn new(name: &String, gl: &WebGlRenderingContext, vertices: Vec<f32>, indices: Vec<u16>, normals: Vec<f32>) -> CmcResult<Self> {
+    pub fn new(name: &String, gl: &WebGlRenderingContext, vertices: Vec<f32>, indices: Vec<u16>, normals: Vec<f32>, texture_coords: Vec<f32>, texture_image: Vec<u8>, image_width: u32, image_height: u32) -> CmcResult<Self> {
         let program = build_program(gl, VERT_SHADER, FRAG_SHADER)?;
 
         let vertices_rect = vertices.as_slice();
@@ -201,6 +206,8 @@ impl ShapeRenderer {
         let indices_rect = indices.as_slice();
 
         let normals_rect = normals.as_slice();
+
+        let texture_coord_rect = texture_coords.as_slice();
 
         let vertices_buffer = wasm_bindgen::memory()
             .dyn_into::<WebAssembly::Memory>()?
@@ -234,8 +241,46 @@ impl ShapeRenderer {
         let indices_buffer = gl.create_buffer().ok_or(CmcError::missing_val("Failed to create buffer"))?;
         gl.bind_buffer(WebGL::ELEMENT_ARRAY_BUFFER, Some(&indices_buffer));
         gl.buffer_data_with_array_buffer_view(WebGL::ELEMENT_ARRAY_BUFFER, &indices_array, WebGL::STATIC_DRAW);
-        let u_color = gl.get_uniform_location(&program, "uColor")
-            .ok_or(CmcError::missing_val("uColor"))?;
+
+        let texture_coord_buffer = wasm_bindgen::memory()
+            .dyn_into::<WebAssembly::Memory>()?
+            .buffer();
+        let texture_coord_location = texture_coord_rect.as_ptr() as u32 / 4;
+        let texture_coord_array = js_sys::Float32Array::new(&texture_coord_buffer).subarray(
+            texture_coord_location,
+            texture_coord_location + texture_coord_rect.len() as u32);
+        let texture_coord_buffer = gl.create_buffer().ok_or(CmcError::missing_val("Failed to create buffer"))?;
+        gl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&texture_coord_buffer));
+        gl.buffer_data_with_array_buffer_view(WebGL::ARRAY_BUFFER, &texture_coord_array, WebGL::STATIC_DRAW);
+
+        let u_texture = gl.get_uniform_location(&program, "uTexture")
+            .ok_or(CmcError::missing_val("uTexture"))?;
+        let texture = gl.create_texture()
+            .ok_or(CmcError::missing_val("Texture creation"))?;
+        // let texture_buf: [u8; 4*16] = [
+        //     0, 0, 255, 255,
+        //     255, 255, 255, 255,
+        //     255, 255, 255, 255,
+        //     255, 255, 255, 255,
+        //     0, 0, 255, 255,
+        //     0, 0, 255, 255,
+        //     0, 0, 255, 255,
+        //     0, 0, 255, 255,
+        //     0, 0, 255, 255,
+        //     0, 0, 255, 255,
+        //     0, 0, 255, 255,
+        //     0, 0, 255, 255,
+        //     255, 255, 255, 255,
+        //     255, 255, 255, 255,
+        //     255, 255, 255, 255,
+        //     255, 255, 255, 255,
+        // ];
+        gl.bind_texture(WebGL::TEXTURE_2D, Some(&texture));
+        let image_width = image_width as i32;
+        let image_height = image_height as i32;
+        log::info!("Height: {}, Width: {}", image_height, image_width);
+        gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(WebGL::TEXTURE_2D, 0, WebGL::RGBA as i32, image_width, image_height, 0, WebGL::RGBA, WebGL::UNSIGNED_BYTE, Some(texture_image.as_slice()))?;
+        gl.generate_mipmap(WebGL::TEXTURE_2D);
         let u_model = gl.get_uniform_location(&program, "uModel")
             .ok_or(CmcError::missing_val("uModel"))?;
 
@@ -260,10 +305,11 @@ impl ShapeRenderer {
             name: name.clone(),
             program,
             vertice_buffer,
+            texture_coord_buffer,
             index_buffer: indices_buffer,
             index_count: indices_array.length() as i32,
             normals_buffer,
-            u_color,
+            u_texture,
             u_model,
             u_view,
             u_projection,
@@ -271,6 +317,7 @@ impl ShapeRenderer {
             point_lights,
             spot_lights,
             u_eye,
+            texture,
         })
     }
 }
@@ -296,13 +343,14 @@ impl Renderer for ShapeRenderer {
         gl.vertex_attrib_pointer_with_i32(1, 3, WebGL::FLOAT, false, 0, 0);
         gl.enable_vertex_attrib_array(1);
 
-        gl.uniform4f(
-            Some(&self.u_color),
-            1., //r
-            1.,//g
-            1.,//b
-            1.,//a
-        );
+        gl.bind_buffer(WebGL::ARRAY_BUFFER, Some(&self.texture_coord_buffer));
+        gl.vertex_attrib_pointer_with_i32(2, 2, WebGL::FLOAT, false, 0, 0);
+        gl.enable_vertex_attrib_array(2);
+
+        gl.active_texture(WebGL::TEXTURE0);
+        gl.bind_texture(WebGL::TEXTURE_2D, Some(&self.texture));
+        gl.uniform1i(Some(&self.u_texture), 0);
+
         let model_mat = Isometry3::new(location.clone(), rotation.clone()).to_homogeneous();
         let projection_mat = projection.to_homogeneous();
         //let projection_mat = projection.as_matrix();
@@ -312,7 +360,7 @@ impl Renderer for ShapeRenderer {
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_projection), false, projection_mat.as_slice());
         gl.uniform3fv_with_f32_array(Some(&self.u_eye), eye.as_slice());
 
-        let ambient_light = vec![0.1, 0.1, 0.1];
+        let ambient_light = vec![0.5, 0.5, 0.5];
         gl.uniform3fv_with_f32_array(Some(&self.u_ambient_light), ambient_light.as_slice());
         for (index, light) in lights.iter().enumerate() {
             match light {

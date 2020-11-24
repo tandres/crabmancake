@@ -70,7 +70,7 @@ impl AppState {
             time: 0.,
             rotations: [0.; 3],
             limit: 175.,
-            light_location: [0.;3],
+            light_location: [0.,2.,0.],
         }
     }
 }
