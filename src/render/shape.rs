@@ -22,6 +22,7 @@ const VERT_SHADER: &str = r#"
         gl_Position = uProjection * ((uView * uModel) * aPosition);
         vFragLoc = vec3(uModel * aPosition);
         vNormal = mat3(uModel) * aNormal;
+        vTextureCoord = aTextureCoord;
     }
 "#;
 const MAX_POINT_LIGHTS: usize = 10;
@@ -257,29 +258,13 @@ impl ShapeRenderer {
             .ok_or(CmcError::missing_val("uTexture"))?;
         let texture = gl.create_texture()
             .ok_or(CmcError::missing_val("Texture creation"))?;
-        // let texture_buf: [u8; 4*16] = [
-        //     0, 0, 255, 255,
-        //     255, 255, 255, 255,
-        //     255, 255, 255, 255,
-        //     255, 255, 255, 255,
-        //     0, 0, 255, 255,
-        //     0, 0, 255, 255,
-        //     0, 0, 255, 255,
-        //     0, 0, 255, 255,
-        //     0, 0, 255, 255,
-        //     0, 0, 255, 255,
-        //     0, 0, 255, 255,
-        //     0, 0, 255, 255,
-        //     255, 255, 255, 255,
-        //     255, 255, 255, 255,
-        //     255, 255, 255, 255,
-        //     255, 255, 255, 255,
-        // ];
+        let texture_buf = texture_image;
         gl.bind_texture(WebGL::TEXTURE_2D, Some(&texture));
+        gl.tex_parameteri(WebGL::TEXTURE_2D, WebGL::TEXTURE_WRAP_S, WebGL::MIRRORED_REPEAT as i32);
+        gl.tex_parameteri(WebGL::TEXTURE_2D, WebGL::TEXTURE_WRAP_T, WebGL::MIRRORED_REPEAT as i32);
         let image_width = image_width as i32;
         let image_height = image_height as i32;
-        log::info!("Height: {}, Width: {}", image_height, image_width);
-        gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(WebGL::TEXTURE_2D, 0, WebGL::RGBA as i32, image_width, image_height, 0, WebGL::RGBA, WebGL::UNSIGNED_BYTE, Some(texture_image.as_slice()))?;
+        gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(WebGL::TEXTURE_2D, 0, WebGL::RGBA as i32, image_width, image_height, 0, WebGL::RGBA, WebGL::UNSIGNED_BYTE, Some(texture_buf.as_slice()))?;
         gl.generate_mipmap(WebGL::TEXTURE_2D);
         let u_model = gl.get_uniform_location(&program, "uModel")
             .ok_or(CmcError::missing_val("uModel"))?;

@@ -133,6 +133,7 @@ fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<D
     let mut image_height = 0;
     for prim in object.primitives() {
         // trace!("Mode: {:?}", prim.mode());
+        log::trace!("Target: {:?}", prim.get(&gltf::Semantic::Positions));
         let reader = prim.reader(|buffer| Some(&buffers[buffer.index()]));
         if let Some(positions) = reader.read_positions() {
             for position in positions {
@@ -154,7 +155,7 @@ fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<D
         }
         if let Some(texture_coordinates) = reader.read_tex_coords(0) {
             for coord in texture_coordinates.into_f32() {
-                // log::trace!("Tex Coord: {:?}", coord);
+                log::trace!("Tex Coord: {:?}", coord);
                 out_tex_coords.extend_from_slice(&coord);
             }
         }

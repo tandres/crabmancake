@@ -68,12 +68,8 @@ impl CmcClient {
             log::info!("{}", key);
         }
         let mut shapes = Vec::new();
-        let entity = Entity::new_at(Vector3::new(10.,0.,0.));
-        let cube_renderer = rendercache.get_shaperenderer("Cube_glb").expect("Failed to get renderer");
-        shapes.push(Shape::new(cube_renderer, entity));
-
         let entity = Entity::new_at(Vector3::new(0.,0.,0.));
-        let cube_renderer = rendercache.get_shaperenderer("Cube_glb").expect("Failed to get renderer");
+        let cube_renderer = rendercache.get_shaperenderer("Cube_textured_glb").expect("Failed to get renderer");
         shapes.push(Shape::new(cube_renderer, entity));
         let client = CmcClient {
             web_gl: gl,
@@ -143,6 +139,7 @@ fn setup_gl_context(doc: &Document, print_context_info: bool) -> Result<web_sys:
         debug!("Max Vertex Attributes: {}", WebGL::MAX_VERTEX_ATTRIBS);
         debug!("Max Vertex Uniform vectors: {}", WebGL::MAX_VERTEX_UNIFORM_VECTORS);
         debug!("Max Fragment Uniform vectors: {}", WebGL::MAX_FRAGMENT_UNIFORM_VECTORS);
+        debug!("Max Texture Size: {}", WebGL::MAX_TEXTURE_SIZE);
     }
 
     attach_mouse_down_handler(&canvas)?;
@@ -152,7 +149,7 @@ fn setup_gl_context(doc: &Document, print_context_info: bool) -> Result<web_sys:
     context.enable(WebGL::DEPTH_TEST);
     context.enable(WebGL::BLEND);
     context.blend_func(WebGL::SRC_ALPHA, WebGL::ONE_MINUS_SRC_ALPHA);
-    context.clear_color(0., 0., 0., 1.);
+    context.clear_color(0.5, 0.5, 0.5, 1.);
     context.clear_depth(1.);
     Ok(context)
 }
