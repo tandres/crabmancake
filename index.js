@@ -8,7 +8,7 @@ async function crab() {
     mod.cmc_init();
 
     const FPS_THROTTLE = 1000.0 / 30.0;
-    const cmcClient = new mod.CmcClient();
+    const cmcClient = await new mod.CmcClient();
     const initialTime = Date.now();
     let lastDrawTime = -1;
 

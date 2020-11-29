@@ -12,3 +12,4 @@ cp index.html ${WEBDIR}/index.html
 cp index.js ${WEBDIR}/index.js
 
 cp -r pkg ${WEBDIR}/pkg
+cp -r models ${WEBDIR}/models

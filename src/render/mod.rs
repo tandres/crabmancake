@@ -133,7 +133,7 @@ fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<D
     let mut image_height = 0;
     for prim in object.primitives() {
         // trace!("Mode: {:?}", prim.mode());
-        log::trace!("Target: {:?}", prim.get(&gltf::Semantic::Positions));
+        // log::trace!("Target: {:?}", prim.get(&gltf::Semantic::Positions));
         let reader = prim.reader(|buffer| Some(&buffers[buffer.index()]));
         if let Some(positions) = reader.read_positions() {
             for position in positions {
@@ -155,7 +155,7 @@ fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<D
         }
         if let Some(texture_coordinates) = reader.read_tex_coords(0) {
             for coord in texture_coordinates.into_f32() {
-                log::trace!("Tex Coord: {:?}", coord);
+                // log::trace!("Tex Coord: {:?}", coord);
                 out_tex_coords.extend_from_slice(&coord);
             }
         }
@@ -163,14 +163,14 @@ fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<D
         if let Some(texture_info) = material.pbr_metallic_roughness().base_color_texture() {
             let texture = texture_info.texture();
             let name = texture_info.texture().source().name();
-            log::trace!("Image name: {:?}", name);
-            log::trace!("Image index: {}", texture.index());
+            // log::trace!("Image name: {:?}", name);
+            // log::trace!("Image index: {}", texture.index());
             let image = &images[texture.index()];
-            log::trace!("Image size: {}", image.pixels.len());
+            // log::trace!("Image size: {}", image.pixels.len());
             out_image = image.pixels.clone();
             image_width = image.width;
             image_height = image.height;
-            log::trace!("Image format: {:?}", image.format);
+            // log::trace!("Image format: {:?}", image.format);
             let format = match image.format {
                 Format::R8G8B8A8 => WebGlRenderingContext::RGBA,
                 _ => {

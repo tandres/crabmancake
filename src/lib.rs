@@ -15,6 +15,7 @@ mod error;
 mod render;
 mod shape;
 mod state;
+mod assets;
 
 const MODEL_DIR: Dir = include_dir!("models/");
 
@@ -29,10 +30,14 @@ pub struct CmcClient {
 #[wasm_bindgen]
 impl CmcClient {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> Result<CmcClient, JsValue> {
+    pub async fn new() -> Result<CmcClient, JsValue> {
         let window = web_sys::window().expect("no global `window` exists");
+        let location = window.location();
         let document: Document = window.document().expect("should have a document on window");
         let body = document.body().expect("No body!");
+
+        let assets = assets::load_models(location.origin()?, &window).await?;
+
         let (label, slider) = create_slider(&document, "X", 0.0..360.0, 0.0, |x| state::update_shape_rotation(0, x))?;
         body.append_child(&label)?;
         body.append_child(&slider)?;
@@ -69,7 +74,7 @@ impl CmcClient {
         }
         let mut shapes = Vec::new();
         let entity = Entity::new_at(Vector3::new(0.,0.,0.));
-        let cube_renderer = rendercache.get_shaperenderer("Cube_textured_glb").expect("Failed to get renderer");
+        let cube_renderer = rendercache.get_shaperenderer("Sphere_glb").expect("Failed to get renderer");
         shapes.push(Shape::new(cube_renderer, entity));
         let client = CmcClient {
             web_gl: gl,
@@ -215,3 +220,4 @@ where
     html_input.add_event_listener_with_callback("input", &Function::from(handler.into_js_value()))?;
     Ok((html_label, html_input))
 }
+

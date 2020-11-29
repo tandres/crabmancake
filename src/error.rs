@@ -7,6 +7,8 @@ pub type CmcResult<T> = Result<T, CmcError>;
 pub enum CmcError {
     #[error("Missing value: {0}")]
     MissingVal(String),
+    #[error("Conversion failed: {0}")]
+    ConversionFail(String),
     #[error("Shader compilation failure: {log}")]
     ShaderCompile {
         log: String,
@@ -30,6 +32,10 @@ pub enum CmcError {
 impl CmcError {
     pub fn missing_val<S: AsRef<str>>(msg: S) -> Self {
         Self::MissingVal(msg.as_ref().to_string())
+    }
+
+    pub fn conversion_failed<S: AsRef<str>>(msg: S) -> Self {
+        Self::ConversionFail(msg.as_ref().to_string())
     }
 }
 
