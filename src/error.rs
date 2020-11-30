@@ -27,6 +27,11 @@ pub enum CmcError {
         #[from]
         error: gltf::Error,
     },
+    #[error("Png error: {error}")]
+    Png {
+        #[from]
+        error: png::DecodingError,
+    }
 }
 
 impl CmcError {

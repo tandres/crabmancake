@@ -6,7 +6,6 @@ use wasm_bindgen::prelude::*;
 use web_sys::{Document, Element, HtmlCanvasElement, HtmlInputElement, WebGlRenderingContext as WebGL};
 use js_sys::Function;
 use nalgebra::{Isometry3, Perspective3, Point3, Vector3};
-use include_dir::{include_dir, Dir};
 
 const GIT_VERSION: &str = git_version::git_version!();
 
@@ -16,8 +15,6 @@ mod render;
 mod shape;
 mod state;
 mod assets;
-
-const MODEL_DIR: Dir = include_dir!("models/");
 
 #[wasm_bindgen]
 pub struct CmcClient {
@@ -36,7 +33,7 @@ impl CmcClient {
         let document: Document = window.document().expect("should have a document on window");
         let body = document.body().expect("No body!");
 
-        let assets = assets::load_models(location.origin()?, &window).await?;
+        let models = assets::load_models(location.origin()?, &window).await?;
 
         let (label, slider) = create_slider(&document, "X", 0.0..360.0, 0.0, |x| state::update_shape_rotation(0, x))?;
         body.append_child(&label)?;
@@ -67,14 +64,14 @@ impl CmcClient {
         body.append_child(&slider)?;
 
         let gl = setup_gl_context(&document, true)?;
-        let rendercache = render::build_rendercache(&gl, &MODEL_DIR).expect("Failed to create rendercache");
+        let rendercache = render::build_rendercache(&gl, &models).expect("Failed to create rendercache");
         log::info!("Available shapes");
         for key in rendercache.shape_renderers.keys() {
             log::info!("{}", key);
         }
         let mut shapes = Vec::new();
         let entity = Entity::new_at(Vector3::new(0.,0.,0.));
-        let cube_renderer = rendercache.get_shaperenderer("Sphere_glb").expect("Failed to get renderer");
+        let cube_renderer = rendercache.get_shaperenderer("Plane_glb").expect("Failed to get renderer");
         shapes.push(Shape::new(cube_renderer, entity));
         let client = CmcClient {
             web_gl: gl,

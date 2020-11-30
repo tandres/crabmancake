@@ -1,9 +1,8 @@
-use crate::error::{CmcResult, CmcError};
-use log::{error, warn};
+use crate::{assets::Model, error::{CmcResult, CmcError}};
+use log::warn;
 use nalgebra::{Isometry3, Perspective3, Vector3};
 use std::{collections::HashMap, rc::Rc};
 use web_sys::*;
-use include_dir::Dir;
 use gltf::{mesh::Mesh, buffer::Data, image::Format};
 
 mod simple;
@@ -77,50 +76,28 @@ impl RenderCache {
     }
 }
 
-pub fn build_rendercache(gl: &WebGlRenderingContext, model_dir: &Dir) -> CmcResult<RenderCache> {
+pub fn build_rendercache(gl: &WebGlRenderingContext, models: &Vec<Model>) -> CmcResult<RenderCache> {
+// pub fn build_rendercache(gl: &WebGlRenderingContext, model_dir: &Dir) -> CmcResult<RenderCache> {
     let mut shape_renderers = HashMap::new();
     let simple_renderer = SimpleRenderer::new(gl)?;
-    for file in model_dir.files().iter() {
-        let path = file.path();
-        log::trace!("{} extension: {:?}", path.display(), path.extension());
-        if let Some(ext) = path.extension() {
-            match ext.to_str() {
-                Some("glb") => {
-                    let (gltf, buffers, images) = gltf::import_slice(file.contents())?;
-                    log::trace!("Gltf loaded, {} buffers and {} images", buffers.len(), images.len());
-                    // trace!("Gltf contents: {:?}", gltf);
-                    for mesh in gltf.meshes() {
-                        let (obj_name, renderer) = build_renderer_glb(gl, &mesh, &buffers, &images)?;
-                        if let Some(old) = shape_renderers.insert(obj_name, Rc::new(renderer)) {
-                            warn!("Replaced renderer: {}", old.name);
-                        }
-                    }
-                }
-                Some(other) => warn!("Unhandled file extension {}", other),
-                None => error!("Failed to convert extension to string for {:?}", file),
+    for model in models {
+        let (gltf, buffers, images) = (&model.gltf, &model.buffers, &model.images);
+        log::trace!("Gltf loaded, {} buffers and {} images", buffers.len(), images.len());
+        // trace!("Gltf contents: {:?}", gltf);
+        for mesh in gltf.meshes() {
+            let (obj_name, renderer) = build_renderer_glb(gl, &mesh, buffers, images)?;
+            if let Some(old) = shape_renderers.insert(obj_name, Rc::new(renderer)) {
+                warn!("Replaced renderer: {}", old.name);
             }
         }
     }
-    // let (name, renderer) = build_test_triangle(gl)?;
-    // shape_renderers.insert(name, Rc::new(renderer));
     Ok(RenderCache {
         simple_renderer,
         shape_renderers,
     })
 }
 
-// fn build_test_triangle(gl: &WebGlRenderingContext) -> CmcResult<(String, ShapeRenderer)> {
-//     let test_triangle = ShapeRenderer::new(
-//         &"test_triangle".to_string(),
-//         gl,
-//         vec![1.,1.,0.,-1.,1.,0.,-1.,-1.,0.],
-//         vec![0, 1, 2],
-//         vec![0.,0.,-1.,0.,0.,-1.,0.,0.,-1.],
-//         vec![1.,1.,0.,-1.,1.,0.,-1.,-1.,0.])?;
-//     Ok(("test_triangle".to_string(), test_triangle))
-// }
-
-fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<Data>, images: &Vec<gltf::image::Data>) -> CmcResult<(String, ShapeRenderer)> {
+fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<Vec<u8>>, images: &Vec<gltf::image::Data>) -> CmcResult<(String, ShapeRenderer)> {
     let name = object.name().ok_or(CmcError::missing_val("Glb mesh name")).unwrap();
     let name = format!("{}_{}", name, "glb");
     // trace!("Name: {}", name);

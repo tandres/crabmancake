@@ -8,16 +8,16 @@ use wasm_bindgen_futures::JsFuture;
 use wasm_streams::ReadableStream;
 use web_sys::{Request, RequestInit, RequestMode, Response, Window};
 use js_sys::Uint8Array;
-use gltf::{mesh::Mesh, buffer::{Buffer, Source as BufSource}, image::Format, Gltf, image::Source as ImgSource};
+use gltf::{mesh::Mesh, buffer::{Buffer, Source as BufSource}, image::{Data as ImgData, Format}, Gltf, image::Source as ImgSource};
 
 mod asset_list;
 
 const MODEL_DIR: &str = "models";
 
 pub struct Model {
-    gltf: Gltf,
-    buffers: Vec<Vec<u8>>,
-    images: Vec<Vec<u8>>,
+    pub gltf: Gltf,
+    pub buffers: Vec<Vec<u8>>,
+    pub images: Vec<gltf::image::Data>,
 }
 
 async fn build_fetcher(uri: String, window: &Window) -> CmcResult<Vec<u8>> {
@@ -103,7 +103,7 @@ async fn load_buffers(gltf: &Gltf, server_root: &str, window: &Window) -> CmcRes
     Ok(output_buffers)
 }
 
-async fn load_images(gltf: &Gltf, server_root: &str, window: &Window) -> CmcResult<Vec<Vec<u8>>> {
+async fn load_images(gltf: &Gltf, server_root: &str, window: &Window) -> CmcResult<Vec<ImgData>> {
     let mut output_buffers = Vec::new();
     for image in gltf.images() {
         log::info!("Loading image: {:?}", image.name());
@@ -112,7 +112,17 @@ async fn load_images(gltf: &Gltf, server_root: &str, window: &Window) -> CmcResu
                 let uri = format!("{}/{}/{}",server_root, MODEL_DIR, uri);
                 log::info!("Uri for image: {}", uri);
                 if let Ok(buf) = build_fetcher(uri.clone(), window).await {
-                    output_buffers.insert(image.index(), buf);
+                    let cursor = std::io::Cursor::new(buf);
+                    let (info, mut reader) = png::Decoder::new(cursor).read_info()?;
+                    let mut raw = vec![0; info.buffer_size()];
+                    reader.next_frame(&mut raw)?;
+                    log::info!("Image info: {:?}", info);
+                    output_buffers.insert(image.index(), ImgData {
+                        pixels: raw,
+                        width: info.width,
+                        height: info.height,
+                        format: Format::R8G8B8A8,
+                    });
                 } else {
                     log::warn!("Failed to fetch image: {}", uri);
                 }
