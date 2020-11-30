@@ -1,14 +1,13 @@
-use futures::{Future, stream::FuturesUnordered, StreamExt, TryFutureExt, TryStreamExt};
+use futures::{stream::FuturesUnordered, StreamExt, TryFutureExt, TryStreamExt};
 use crate::error::{CmcError, CmcResult};
 use std::path::Path;
 use asset_list::get_asset_list;
 use wasm_bindgen::JsCast;
-use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use wasm_streams::ReadableStream;
 use web_sys::{Request, RequestInit, RequestMode, Response, Window};
 use js_sys::Uint8Array;
-use gltf::{mesh::Mesh, buffer::{Buffer, Source as BufSource}, image::{Data as ImgData, Format}, Gltf, image::Source as ImgSource};
+use gltf::{buffer::Source as BufSource, image::{Data as ImgData, Format}, Gltf, image::Source as ImgSource};
 
 mod asset_list;
 

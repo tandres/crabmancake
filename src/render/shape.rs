@@ -1,5 +1,5 @@
 use crate::error::{CmcError, CmcResult};
-use super::{Light, Renderer, common::build_program};
+use super::{Light, common::build_program};
 use js_sys::WebAssembly;
 use nalgebra::{Isometry3, Perspective3, Vector3};
 use wasm_bindgen::JsCast;
@@ -305,10 +305,8 @@ impl ShapeRenderer {
             texture,
         })
     }
-}
 
-impl Renderer for ShapeRenderer {
-    fn render(
+    pub fn render(
         &self,
         gl: &WebGlRenderingContext,
         view: &Isometry3<f32>,

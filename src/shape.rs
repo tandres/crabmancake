@@ -1,13 +1,10 @@
-use crate::{render::{Light, Renderer}, entity::Entity};
+use crate::{render::{Light, ShapeRenderer}, entity::Entity};
 use nalgebra::{Isometry3, Perspective3, Vector3};
 use web_sys::WebGlRenderingContext;
 use std::rc::Rc;
 
-pub struct Shape<R>
-where
-    R: Renderer,
-{
-    renderer: Rc<R>,
+pub struct Shape {
+    renderer: Rc<ShapeRenderer>,
     // be cool to figure out how pre-computing the transforms on rotation and translation
     // might be more efficient. Super early to answer but interesting thought.
     // For now just dumping everything into entity then we'll move it into a phys from there.
@@ -15,11 +12,8 @@ where
     pub entity: Entity,
 }
 
-impl<R> Shape<R>
-where
-    R: Renderer,
-{
-    pub fn new(renderer: Rc<R>, entity: Entity) -> Self {
+impl Shape {
+    pub fn new(renderer: Rc<ShapeRenderer>, entity: Entity) -> Self {
         Self { renderer, entity }
     }
 

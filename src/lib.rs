@@ -1,4 +1,4 @@
-use crate::{entity::Entity, shape::Shape, error::CmcError, render::{RenderCache, ShapeRenderer, Light}};
+use crate::{entity::Entity, shape::Shape, error::CmcError, render::{RenderCache, Light}};
 use log::{trace, debug};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
@@ -21,7 +21,7 @@ pub struct CmcClient {
     web_gl: WebGL,
     #[allow(dead_code)]
     rendercache: RenderCache,
-    shapes: Vec<Shape<ShapeRenderer>>,
+    shapes: Vec<Shape>,
 }
 
 #[wasm_bindgen]

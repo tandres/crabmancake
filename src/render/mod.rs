@@ -1,17 +1,14 @@
 use crate::{assets::Model, error::{CmcResult, CmcError}};
 use log::warn;
-use nalgebra::{Isometry3, Perspective3, Vector3};
+use nalgebra::Vector3;
 use std::{collections::HashMap, rc::Rc};
 use web_sys::*;
-use gltf::{mesh::Mesh, buffer::Data, image::Format};
+use gltf::{mesh::Mesh, image::Format};
 
-mod simple;
 mod shape;
 mod common;
 
-pub use simple::SimpleRenderer;
 pub use shape::ShapeRenderer;
-
 
 pub enum Light {
     Point {
@@ -52,13 +49,8 @@ impl Light {
 
 }
 
-pub trait Renderer {
-    fn render(&self, gl: &WebGlRenderingContext, view: &Isometry3<f32>, eye: &Vector3<f32>, projection: &Perspective3<f32>, location: &Vector3<f32>, rotation: &Vector3<f32>, lights: &Vec<Light>);
-}
 
 pub struct RenderCache {
-    #[allow(unused)]
-    simple_renderer: SimpleRenderer,
     pub shape_renderers: HashMap<String, Rc<ShapeRenderer>>,
 }
 
@@ -79,7 +71,6 @@ impl RenderCache {
 pub fn build_rendercache(gl: &WebGlRenderingContext, models: &Vec<Model>) -> CmcResult<RenderCache> {
 // pub fn build_rendercache(gl: &WebGlRenderingContext, model_dir: &Dir) -> CmcResult<RenderCache> {
     let mut shape_renderers = HashMap::new();
-    let simple_renderer = SimpleRenderer::new(gl)?;
     for model in models {
         let (gltf, buffers, images) = (&model.gltf, &model.buffers, &model.images);
         log::trace!("Gltf loaded, {} buffers and {} images", buffers.len(), images.len());
@@ -92,7 +83,6 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, models: &Vec<Model>) -> Cmc
         }
     }
     Ok(RenderCache {
-        simple_renderer,
         shape_renderers,
     })
 }
@@ -139,7 +129,7 @@ fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<V
         let material = prim.material();
         if let Some(texture_info) = material.pbr_metallic_roughness().base_color_texture() {
             let texture = texture_info.texture();
-            let name = texture_info.texture().source().name();
+            let _name = texture_info.texture().source().name();
             // log::trace!("Image name: {:?}", name);
             // log::trace!("Image index: {}", texture.index());
             let image = &images[texture.index()];
@@ -148,7 +138,7 @@ fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<V
             image_width = image.width;
             image_height = image.height;
             // log::trace!("Image format: {:?}", image.format);
-            let format = match image.format {
+            let _format = match image.format {
                 Format::R8G8B8A8 => WebGlRenderingContext::RGBA,
                 _ => {
                     log::warn!("Format not supported!");
