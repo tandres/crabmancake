@@ -25,11 +25,9 @@ const VERT_SHADER: &str = r#"
         vTextureCoord = aTextureCoord;
     }
 "#;
-const MAX_POINT_LIGHTS: usize = 10;
-const MAX_SPOT_LIGHTS: usize = 10;
+const MAX_LIGHTS: usize = 10;
 const FRAG_SHADER: &str = r#"
-    #define MAX_POINT_LIGHTS 10
-    #define MAX_SPOT_LIGHTS 10
+    #define MAX_LIGHTS 10
 
     precision mediump float;
     varying vec3 vNormal;
@@ -40,17 +38,7 @@ const FRAG_SHADER: &str = r#"
     uniform vec3 uEyeLocation;
     uniform sampler2D uTexture;
 
-    struct PointLight {
-        vec3 color;
-        vec3 location;
-
-        float intensity;
-
-        vec3 attenuator;
-    };
-    uniform PointLight point_lights[MAX_POINT_LIGHTS];
-
-    struct SpotLight {
+    struct Light {
         vec3 color;
         vec3 location;
         vec3 direction;
@@ -61,34 +49,15 @@ const FRAG_SHADER: &str = r#"
 
         vec3 attenuator;
     };
-    uniform SpotLight spot_lights[MAX_SPOT_LIGHTS];
+    uniform Light spot_lights[MAX_LIGHTS];
 
     void main() {
         vec3 normal = normalize(vNormal);
         vec3 fragment_to_view = normalize(uEyeLocation - vFragLoc);
 
         vec3 lighting = uAmbientLight;
-        for(int i = 0; i < MAX_POINT_LIGHTS; i++) {
-            vec3 light_location = point_lights[i].location;
-            vec3 light_color = point_lights[i].color;
-            vec3 attenuator = point_lights[i].attenuator;
-            float intensity = point_lights[i].intensity;
 
-            vec3 fragment_to_light = normalize(light_location - vFragLoc);
-            float diffuse_directional = max(dot(normal, fragment_to_light), 0.0);
-            float specular = 0.0;
-            if (diffuse_directional > 0.0) {
-                vec3 half_vector = normalize(fragment_to_light + fragment_to_view);
-                float viewable_reflection = dot(normal, half_vector);
-                specular = pow(max(viewable_reflection, 0.0), 32.0);
-            }
-            float distance    = length(light_location - vFragLoc);
-            float attenuation = max(1.0, intensity) / (1.0 + attenuator.y * distance +
-    		    attenuator.z * (distance * distance));
-            lighting += (diffuse_directional + specular) * light_color * attenuation;
-        }
-
-        for(int j = 0; j < MAX_SPOT_LIGHTS; j++) {
+        for(int j = 0; j < MAX_LIGHTS; j++) {
             vec3 light_location = spot_lights[j].location;
             vec3 light_direction = spot_lights[j].direction;
             vec3 light_color = spot_lights[j].color;
@@ -117,32 +86,7 @@ const FRAG_SHADER: &str = r#"
     }
 "#;
 
-pub struct PointLight {
-    color: WebGlUniformLocation,
-    location: WebGlUniformLocation,
-    intensity: WebGlUniformLocation,
-    attenuator: WebGlUniformLocation,
-}
-
-impl PointLight {
-    fn new_at_index(gl: &WebGlRenderingContext, program: &WebGlProgram, array_name: &str, index: usize) -> CmcResult<Self> {
-        let color_name = format!("{}[{}].color", array_name, index);
-        let location_name = format!("{}[{}].location", array_name, index);
-        let intensity_name = format!("{}[{}].intensity", array_name, index);
-        let attenuator_name = format!("{}[{}].attenuator", array_name, index);
-        let color = gl.get_uniform_location(program, color_name.as_str())
-            .ok_or(CmcError::missing_val(color_name))?;
-        let location = gl.get_uniform_location(program, location_name.as_str())
-            .ok_or(CmcError::missing_val(location_name))?;
-        let intensity = gl.get_uniform_location(program, intensity_name.as_str())
-            .ok_or(CmcError::missing_val(intensity_name))?;
-        let attenuator = gl.get_uniform_location(program, attenuator_name.as_str())
-            .ok_or(CmcError::missing_val(attenuator_name))?;
-        Ok(Self { color, location, intensity, attenuator })
-    }
-}
-
-pub struct SpotLight {
+struct RenderLight {
     color: WebGlUniformLocation,
     location: WebGlUniformLocation,
     direction: WebGlUniformLocation,
@@ -152,7 +96,7 @@ pub struct SpotLight {
     attenuator: WebGlUniformLocation,
 }
 
-impl SpotLight {
+impl RenderLight {
     fn new_at_index(gl: &WebGlRenderingContext, program: &WebGlProgram, array_name: &str, index: usize) -> CmcResult<Self> {
         let color_name = format!("{}[{}].color", array_name, index);
         let location_name = format!("{}[{}].location", array_name, index);
@@ -177,6 +121,27 @@ impl SpotLight {
             .ok_or(CmcError::missing_val(attenuator_name))?;
         Ok(Self { color, location, inner_limit, outer_limit, direction, intensity, attenuator})
     }
+
+    fn populate_with(&self, gl: &WebGlRenderingContext, source_light: &Light) {
+        match source_light {
+            Light::Spot{ color, location, direction, inner_limit, outer_limit, intensity, attenuator } => {
+                let color_location = &self.color;
+                let location_location = &self.location;
+                let direction_location = &self.direction;
+                let inner_limit_location = &self.inner_limit;
+                let outer_limit_location = &self.outer_limit;
+                let intensity_location = &self.intensity;
+                let attenuator_location = &self.attenuator;
+                gl.uniform3fv_with_f32_array(Some(color_location), color.as_slice());
+                gl.uniform3fv_with_f32_array(Some(location_location), location.as_slice());
+                gl.uniform3fv_with_f32_array(Some(direction_location), direction.as_slice());
+                gl.uniform1f(Some(inner_limit_location), *inner_limit);
+                gl.uniform1f(Some(outer_limit_location), *outer_limit);
+                gl.uniform1f(Some(intensity_location), *intensity);
+                gl.uniform3fv_with_f32_array(Some(attenuator_location), &attenuator[..]);
+            },
+        }
+    }
 }
 
 pub struct ShapeRenderer {
@@ -193,8 +158,7 @@ pub struct ShapeRenderer {
     u_projection: WebGlUniformLocation,
     u_ambient_light: WebGlUniformLocation,
     u_eye: WebGlUniformLocation,
-    point_lights: Vec<PointLight>,
-    spot_lights: Vec<SpotLight>,
+    lights: Vec<RenderLight>,
     texture: WebGlTexture,
 }
 
@@ -278,13 +242,9 @@ impl ShapeRenderer {
             .ok_or(CmcError::missing_val("uEyeLocation"))?;
         let u_ambient_light = gl.get_uniform_location(&program, "uAmbientLight")
             .ok_or(CmcError::missing_val("uAmbientLight"))?;
-        let mut point_lights: Vec<PointLight> = Vec::new();
-        for i in 0..MAX_POINT_LIGHTS {
-            point_lights.push(PointLight::new_at_index(gl, &program, "point_lights", i)?);
-        }
-        let mut spot_lights: Vec<SpotLight> = Vec::new();
-        for i in 0..MAX_SPOT_LIGHTS {
-            spot_lights.push(SpotLight::new_at_index(gl, &program, "spot_lights", i)?);
+        let mut lights: Vec<RenderLight> = Vec::new();
+        for i in 0..MAX_LIGHTS {
+            lights.push(RenderLight::new_at_index(gl, &program, "spot_lights", i)?);
         }
         Ok(ShapeRenderer {
             name: name.clone(),
@@ -299,8 +259,7 @@ impl ShapeRenderer {
             u_view,
             u_projection,
             u_ambient_light,
-            point_lights,
-            spot_lights,
+            lights,
             u_eye,
             texture,
         })
@@ -343,37 +302,10 @@ impl ShapeRenderer {
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_projection), false, projection_mat.as_slice());
         gl.uniform3fv_with_f32_array(Some(&self.u_eye), eye.as_slice());
 
-        let ambient_light = vec![0.5, 0.5, 0.5];
+        let ambient_light = vec![0.1, 0.1, 0.1];
         gl.uniform3fv_with_f32_array(Some(&self.u_ambient_light), ambient_light.as_slice());
         for (index, light) in lights.iter().enumerate() {
-            match light {
-                Light::Point{ color, location, intensity, attenuator } => {
-                    let color_location = &self.point_lights[index].color;
-                    let location_location = &self.point_lights[index].location;
-                    let intensity_location = &self.point_lights[index].intensity;
-                    let attenuator_location = &self.point_lights[index].attenuator;
-                    gl.uniform3fv_with_f32_array(Some(color_location), color.as_slice());
-                    gl.uniform3fv_with_f32_array(Some(location_location), location.as_slice());
-                    gl.uniform1f(Some(intensity_location), *intensity);
-                    gl.uniform3fv_with_f32_array(Some(attenuator_location), &attenuator[..]);
-                },
-                Light::Spot{ color, location, direction, inner_limit, outer_limit, intensity, attenuator } => {
-                    let color_location = &self.spot_lights[index].color;
-                    let location_location = &self.spot_lights[index].location;
-                    let direction_location = &self.spot_lights[index].direction;
-                    let inner_limit_location = &self.spot_lights[index].inner_limit;
-                    let outer_limit_location = &self.spot_lights[index].outer_limit;
-                    let intensity_location = &self.spot_lights[index].intensity;
-                    let attenuator_location = &self.spot_lights[index].attenuator;
-                    gl.uniform3fv_with_f32_array(Some(color_location), color.as_slice());
-                    gl.uniform3fv_with_f32_array(Some(location_location), location.as_slice());
-                    gl.uniform3fv_with_f32_array(Some(direction_location), direction.as_slice());
-                    gl.uniform1f(Some(inner_limit_location), *inner_limit);
-                    gl.uniform1f(Some(outer_limit_location), *outer_limit);
-                    gl.uniform1f(Some(intensity_location), *intensity);
-                    gl.uniform3fv_with_f32_array(Some(attenuator_location), &attenuator[..]);
-                },
-            }
+            self.lights[index].populate_with(gl, light);
         }
         gl.bind_buffer(WebGL::ELEMENT_ARRAY_BUFFER, Some(&self.index_buffer));
 

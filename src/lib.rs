@@ -71,7 +71,7 @@ impl CmcClient {
         }
         let mut shapes = Vec::new();
         let entity = Entity::new_at(Vector3::new(0.,0.,0.));
-        let cube_renderer = rendercache.get_shaperenderer("Plane_glb").expect("Failed to get renderer");
+        let cube_renderer = rendercache.get_shaperenderer("Cube.001_glb").expect("Failed to get renderer");
         shapes.push(Shape::new(cube_renderer, entity));
         let client = CmcClient {
             web_gl: gl,
@@ -117,7 +117,8 @@ impl CmcClient {
         let light_location = state.light_location.clone();
         let lights = vec![
             Light::new_point(light_location, [1., 1., 1.], 5.0, attenuator.clone()),
-            Light::new_spot([-5., 0., 0.], [0.,0.,0.], [0.5,0.5,0.5], state.limit, state.limit + 1., 1.0, attenuator.clone()),
+            // Light::new_spot(light_location, [0.,-10.,0.], [1.,1.,1.], state.limit - 0.5, state.limit, 10.0, attenuator.clone()),
+            // Light::new_spot([-5., 0., 0.], [0.,0.,0.], [0.5,0.5,0.5], state.limit, state.limit, 1.0, attenuator.clone()),
         ];
         for shape in self.shapes.iter() {
             shape.render(&self.web_gl, &view, &Vector3::new(eye.x, eye.y, eye.z), &projection, &lights)

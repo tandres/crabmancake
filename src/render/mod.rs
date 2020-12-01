@@ -11,13 +11,6 @@ mod common;
 pub use shape::ShapeRenderer;
 
 pub enum Light {
-    Point {
-        color: Vector3<f32>,
-        location: Vector3<f32>,
-
-        intensity: f32,
-        attenuator: [f32; 3],
-    },
     Spot {
         color: Vector3<f32>,
         location: Vector3<f32>,
@@ -33,9 +26,7 @@ pub enum Light {
 
 impl Light {
     pub fn new_point(location: [f32; 3], color: [f32; 3], intensity: f32, attenuator: [f32; 3]) -> Self {
-        let location = Vector3::from(location);
-        let color = Vector3::from(color);
-        Light::Point {location, color, intensity, attenuator}
+        Self::new_spot(location, [0.; 3], color, 180.0, 180.0, intensity, attenuator)
     }
 
     pub fn new_spot(location: [f32; 3], pointing_at: [f32; 3], color: [f32; 3], inner_limit: f32, outer_limit: f32, intensity: f32, attenuator: [f32; 3]) -> Self {
@@ -44,6 +35,7 @@ impl Light {
         let color = Vector3::from(color);
         let outer_limit = f32::cos(std::f32::consts::PI * outer_limit / 180.);
         let inner_limit = f32::cos(std::f32::consts::PI * inner_limit / 180.);
+        log::info!("Inner limit: {} Outer limit: {}", inner_limit, outer_limit);
         Light::Spot { location, color, direction, inner_limit, outer_limit, intensity, attenuator }
     }
 
@@ -69,7 +61,6 @@ impl RenderCache {
 }
 
 pub fn build_rendercache(gl: &WebGlRenderingContext, models: &Vec<Model>) -> CmcResult<RenderCache> {
-// pub fn build_rendercache(gl: &WebGlRenderingContext, model_dir: &Dir) -> CmcResult<RenderCache> {
     let mut shape_renderers = HashMap::new();
     for model in models {
         let (gltf, buffers, images) = (&model.gltf, &model.buffers, &model.images);
