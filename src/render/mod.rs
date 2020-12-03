@@ -1,5 +1,5 @@
 use crate::{assets::Model, error::{CmcResult, CmcError}};
-use log::warn;
+use gob::{Gob, GobBuffer, GobBufferTarget};
 use nalgebra::Vector3;
 use std::{collections::HashMap, rc::Rc};
 use web_sys::*;
@@ -7,6 +7,7 @@ use gltf::{mesh::Mesh, image::Format};
 
 mod shape;
 mod common;
+mod gob;
 
 pub use shape::ShapeRenderer;
 
@@ -35,7 +36,6 @@ impl Light {
         let color = Vector3::from(color);
         let outer_limit = f32::cos(std::f32::consts::PI * outer_limit / 180.);
         let inner_limit = f32::cos(std::f32::consts::PI * inner_limit / 180.);
-        log::info!("Inner limit: {} Outer limit: {}", inner_limit, outer_limit);
         Light::Spot { location, color, direction, inner_limit, outer_limit, intensity, attenuator }
     }
 
@@ -51,7 +51,7 @@ impl RenderCache {
     pub fn add_shaperenderer<S: AsRef<str>>(&mut self, type_name: S, renderer: ShapeRenderer) {
         let renderer = Rc::new(renderer);
         if let Some(_) = self.shape_renderers.insert(type_name.as_ref().to_string(), renderer) {
-            warn!("Renderer for {} replaced!", type_name.as_ref());
+            log::warn!("Renderer for {} replaced!", type_name.as_ref());
         }
     }
 
@@ -67,9 +67,10 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, models: &Vec<Model>) -> Cmc
         log::trace!("Gltf loaded, {} buffers and {} images", buffers.len(), images.len());
         // trace!("Gltf contents: {:?}", gltf);
         for mesh in gltf.meshes() {
-            let (obj_name, renderer) = build_renderer_glb(gl, &mesh, buffers, images)?;
-            if let Some(old) = shape_renderers.insert(obj_name, Rc::new(renderer)) {
-                warn!("Replaced renderer: {}", old.name);
+            for (obj_name, renderer) in build_renderer_glb(gl, &mesh, buffers, images)? {
+                if let Some(old) = shape_renderers.insert(obj_name, Rc::new(renderer)) {
+                    log::warn!("Replaced renderer: {}", old.name);
+                }
             }
         }
     }
@@ -78,45 +79,22 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, models: &Vec<Model>) -> Cmc
     })
 }
 
-fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<Vec<u8>>, images: &Vec<gltf::image::Data>) -> CmcResult<(String, ShapeRenderer)> {
+fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<Vec<u8>>, images: &Vec<gltf::image::Data>) -> CmcResult<HashMap<String, ShapeRenderer>> {
     let name = object.name().ok_or(CmcError::missing_val("Glb mesh name")).unwrap();
     let name = format!("{}_{}", name, "glb");
-    // trace!("Name: {}", name);
-    let mut out_vertices = Vec::new();
-    let mut out_indices = Vec::new();
-    let mut out_normals = Vec::new();
-    let mut out_tex_coords = Vec::new();
-    let mut out_image = Vec::new();
+    let mut cache = HashMap::new();
     let mut image_width = 0;
     let mut image_height = 0;
+    let gob_buffers: Vec<GobBuffer> = buffers.iter().map(|b| GobBuffer::new(b.clone(), GobBufferTarget::Array)).collect();
+    log::debug!("Gob buffers: {}", gob_buffers.len());
     for prim in object.primitives() {
-        // trace!("Mode: {:?}", prim.mode());
-        // log::trace!("Target: {:?}", prim.get(&gltf::Semantic::Positions));
-        let reader = prim.reader(|buffer| Some(&buffers[buffer.index()]));
-        if let Some(positions) = reader.read_positions() {
-            for position in positions {
-                // trace!("Positions: {:?}", position);
-                out_vertices.extend_from_slice(&position);
-            }
+        let mut out_image = Vec::new();
+        let gob = Gob::new(&prim, &gob_buffers);
+        if gob.is_err() {
+            log::warn!("Gob build failed!");
+            continue;
         }
-        if let Some(indices) = reader.read_indices() {
-            for index in indices.into_u32() {
-                // trace!("Index: {:?}", index);
-                out_indices.push(index as u16);
-            }
-        }
-        if let Some(normals) = reader.read_normals() {
-            for normal in normals {
-                // trace!("Normal: {:?}", normal);
-                out_normals.extend_from_slice(&normal);
-            }
-        }
-        if let Some(texture_coordinates) = reader.read_tex_coords(0) {
-            for coord in texture_coordinates.into_f32() {
-                // log::trace!("Tex Coord: {:?}", coord);
-                out_tex_coords.extend_from_slice(&coord);
-            }
-        }
+        let gob = gob.unwrap();
         let material = prim.material();
         if let Some(texture_info) = material.pbr_metallic_roughness().base_color_texture() {
             let texture = texture_info.texture();
@@ -137,9 +115,11 @@ fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<V
                 },
             };
         }
+
+        let renderer = ShapeRenderer::new(&name, gl, gob, out_image, image_width, image_height)?;
+        cache.insert(name.clone(), renderer);
     }
-    // trace!("Indices: {} Vertices: {} Normals: {}", out_indices.len(), out_vertices.len(), out_normals.len());
-    let renderer = ShapeRenderer::new(&name, gl, out_vertices, out_indices, out_normals, out_tex_coords, out_image, image_width, image_height)?;
-    Ok((name, renderer))
+    Ok(cache)
 }
+
 
