@@ -10,20 +10,20 @@ use web_sys::*;
 const VERT_SHADER: &str = r#"
     attribute vec4 aPosition;
     attribute vec3 aNormal;
-    attribute vec2 aTextureCoord;
+    attribute vec2 aTextureCoord0;
 
     uniform mat4 uView;
     uniform mat4 uProjection;
     uniform mat4 uModel;
     varying vec3 vNormal;
     varying vec3 vFragLoc;
-    varying vec2 vTextureCoord;
+    varying vec2 vTextureCoord0;
 
     void main() {
         gl_Position = uProjection * ((uView * uModel) * aPosition);
         vFragLoc = vec3(uModel * aPosition);
         vNormal = mat3(uModel) * aNormal;
-        vTextureCoord = aTextureCoord;
+        vTextureCoord0 = aTextureCoord0;
     }
 "#;
 const MAX_LIGHTS: usize = 10;
@@ -33,11 +33,11 @@ const FRAG_SHADER: &str = r#"
     precision mediump float;
     varying vec3 vNormal;
     varying vec3 vFragLoc;
-    varying vec2 vTextureCoord;
+    varying vec2 vTextureCoord0;
 
     uniform vec3 uAmbientLight;
     uniform vec3 uEyeLocation;
-    uniform sampler2D uTexture;
+    uniform sampler2D uTexture0;
 
     struct Light {
         vec3 color;
@@ -83,7 +83,7 @@ const FRAG_SHADER: &str = r#"
             lighting += (diffuse_directional + specular) * spot_lights[j].color * attenuation;
         }
 
-        gl_FragColor = texture2D(uTexture, vTextureCoord) * vec4(lighting, 1.0);
+        gl_FragColor = texture2D(uTexture0, vTextureCoord0) * vec4(lighting, 1.0);
     }
 "#;
 
@@ -150,14 +150,13 @@ pub struct ShapeRenderer {
     program: WebGlProgram,
     gob: Gob,
     geometry_buffers: HashMap<usize, WebGlBuffer>,
-    u_texture: WebGlUniformLocation,
     u_model: WebGlUniformLocation,
     u_view: WebGlUniformLocation,
     u_projection: WebGlUniformLocation,
     u_ambient_light: WebGlUniformLocation,
     u_eye: WebGlUniformLocation,
     lights: Vec<RenderLight>,
-    texture: WebGlTexture,
+    textures: Vec<(WebGlTexture, WebGlUniformLocation, u32)>,
 }
 
 fn attr_location(attr_data: &GobDataAttribute) -> Option<u32> {
@@ -170,7 +169,7 @@ fn attr_location(attr_data: &GobDataAttribute) -> Option<u32> {
 }
 
 impl ShapeRenderer {
-    pub fn new(name: &String, gl: &WebGlRenderingContext, mut gob: Gob, texture_image: Vec<u8>, image_width: u32, image_height: u32) -> CmcResult<Self> {
+    pub fn new(name: &String, gl: &WebGlRenderingContext, mut gob: Gob) -> CmcResult<Self> {
         let program = build_program(gl, VERT_SHADER, FRAG_SHADER)?;
         let mut geometry_buffers = HashMap::new();
         let js_memory = wasm_bindgen::memory().dyn_into::<WebAssembly::Memory>()?.buffer();
@@ -194,18 +193,22 @@ impl ShapeRenderer {
             gob_data_access.gl_attribute_index = attr_location(&attr);
         }
 
-        let u_texture = gl.get_uniform_location(&program, "uTexture")
-            .ok_or(CmcError::missing_val("uTexture"))?;
-        let texture = gl.create_texture()
-            .ok_or(CmcError::missing_val("Texture creation"))?;
-        let texture_buf = texture_image;
-        gl.bind_texture(WebGL::TEXTURE_2D, Some(&texture));
-        gl.tex_parameteri(WebGL::TEXTURE_2D, WebGL::TEXTURE_WRAP_S, WebGL::MIRRORED_REPEAT as i32);
-        gl.tex_parameteri(WebGL::TEXTURE_2D, WebGL::TEXTURE_WRAP_T, WebGL::MIRRORED_REPEAT as i32);
-        let image_width = image_width as i32;
-        let image_height = image_height as i32;
-        gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(WebGL::TEXTURE_2D, 0, WebGL::RGBA as i32, image_width, image_height, 0, WebGL::RGBA, WebGL::UNSIGNED_BYTE, Some(texture_buf.as_slice()))?;
-        gl.generate_mipmap(WebGL::TEXTURE_2D);
+        let mut textures = Vec::new();
+        for (index, image) in gob.images.iter() {
+            let texture_name = format!("uTexture{}", index);
+            let u_texture = gl.get_uniform_location(&program, texture_name.as_str())
+                .ok_or(CmcError::missing_val(texture_name))?;
+            let texture = gl.create_texture()
+                .ok_or(CmcError::missing_val("Texture creation"))?;
+            gl.bind_texture(image.target, Some(&texture));
+            gl.tex_parameteri(WebGL::TEXTURE_2D, WebGL::TEXTURE_WRAP_S, WebGL::MIRRORED_REPEAT as i32);
+            gl.tex_parameteri(WebGL::TEXTURE_2D, WebGL::TEXTURE_WRAP_T, WebGL::MIRRORED_REPEAT as i32);
+
+            gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+                image.target, image.level, image.internal_format, image.width, image.height, image.border, image.format, image.data_type, Some(image.data.as_slice()))?;
+            gl.generate_mipmap(image.target);
+            textures.push((texture, u_texture, image.target));
+        }
         let u_model = gl.get_uniform_location(&program, "uModel")
             .ok_or(CmcError::missing_val("uModel"))?;
 
@@ -227,14 +230,13 @@ impl ShapeRenderer {
             gob,
             program,
             geometry_buffers,
-            u_texture,
             u_model,
             u_view,
             u_projection,
             u_ambient_light,
             lights,
             u_eye,
-            texture,
+            textures,
         })
     }
 
@@ -256,10 +258,11 @@ impl ShapeRenderer {
                 gl.enable_vertex_attrib_array(gl_attr_index);
             }
         }
-
-        gl.active_texture(WebGL::TEXTURE0);
-        gl.bind_texture(WebGL::TEXTURE_2D, Some(&self.texture));
-        gl.uniform1i(Some(&self.u_texture), 0);
+        for (index, (texture, utexture, target)) in self.textures.iter().enumerate() {
+            gl.active_texture(WebGL::TEXTURE0 + index as u32);
+            gl.bind_texture(*target, Some(texture));
+            gl.uniform1i(Some(utexture), index as i32);
+        }
 
         let model_mat = Isometry3::new(location.clone(), rotation.clone()).to_homogeneous();
         let projection_mat = projection.to_homogeneous();

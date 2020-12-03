@@ -6,13 +6,13 @@ use wasm_bindgen_futures::JsFuture;
 use wasm_streams::ReadableStream;
 use web_sys::{Request, RequestInit, RequestMode, Response, Window};
 use js_sys::Uint8Array;
-use gltf::{buffer::Source as BufSource, image::{Data as ImgData, Format}, Gltf, image::Source as ImgSource};
-
+use gltf::{buffer::Source as BufSource, Gltf, image::Source as ImgSource};
+use png::OutputInfo;
 
 pub struct Model {
     pub gltf: Gltf,
     pub buffers: Vec<Vec<u8>>,
-    pub images: Vec<gltf::image::Data>,
+    pub images: Vec<(OutputInfo, Vec<u8>)>,
 }
 
 pub async fn build_fetcher(uri: String, window: &Window) -> CmcResult<Vec<u8>> {
@@ -67,7 +67,7 @@ pub async fn load_buffers(gltf: &Gltf, server_root: &str, window: &Window) -> Cm
     Ok(output_buffers)
 }
 
-pub async fn load_images(gltf: &Gltf, server_root: &str, window: &Window) -> CmcResult<Vec<ImgData>> {
+pub async fn load_images(gltf: &Gltf, server_root: &str, window: &Window) -> CmcResult<Vec<(OutputInfo, Vec<u8>)>> {
     let mut output_buffers = Vec::new();
     for image in gltf.images() {
         log::info!("Loading image: {:?}", image.name());
@@ -81,12 +81,7 @@ pub async fn load_images(gltf: &Gltf, server_root: &str, window: &Window) -> Cmc
                     let mut raw = vec![0; info.buffer_size()];
                     reader.next_frame(&mut raw)?;
                     log::info!("Image info: {:?}", info);
-                    output_buffers.insert(image.index(), ImgData {
-                        pixels: raw,
-                        width: info.width,
-                        height: info.height,
-                        format: Format::R8G8B8A8,
-                    });
+                    output_buffers.insert(image.index(), (info, raw));
                 } else {
                     log::warn!("Failed to fetch image: {}", uri);
                 }

@@ -1,9 +1,10 @@
 use crate::{assets::Model, error::{CmcResult, CmcError}};
-use gob::{Gob, GobBuffer, GobBufferTarget};
+use gob::{Gob, GobBuffer, GobBufferTarget, GobImage};
 use nalgebra::Vector3;
 use std::{collections::HashMap, rc::Rc};
 use web_sys::*;
-use gltf::{mesh::Mesh, image::Format};
+use png::OutputInfo;
+use gltf::mesh::Mesh;
 
 mod shape;
 mod common;
@@ -79,45 +80,21 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, models: &Vec<Model>) -> Cmc
     })
 }
 
-fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<Vec<u8>>, images: &Vec<gltf::image::Data>) -> CmcResult<HashMap<String, ShapeRenderer>> {
+fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<Vec<u8>>, images: &Vec<(OutputInfo, Vec<u8>)>) -> CmcResult<HashMap<String, ShapeRenderer>> {
     let name = object.name().ok_or(CmcError::missing_val("Glb mesh name")).unwrap();
     let name = format!("{}_{}", name, "glb");
     let mut cache = HashMap::new();
-    let mut image_width = 0;
-    let mut image_height = 0;
     let gob_buffers: Vec<GobBuffer> = buffers.iter().map(|b| GobBuffer::new(b.clone(), GobBufferTarget::Array)).collect();
+    let gob_images: Vec<GobImage> = images.iter().map(|i| GobImage::from(i)).collect();
     log::debug!("Gob buffers: {}", gob_buffers.len());
     for prim in object.primitives() {
-        let mut out_image = Vec::new();
-        let gob = Gob::new(&prim, &gob_buffers);
-        if gob.is_err() {
+        let gob = Gob::new(&prim, &gob_buffers, &gob_images);
+        if let Ok(gob) = gob {
+            let renderer = ShapeRenderer::new(&name, gl, gob)?;
+            cache.insert(name.clone(), renderer);
+        } else {
             log::warn!("Gob build failed!");
-            continue;
         }
-        let gob = gob.unwrap();
-        let material = prim.material();
-        if let Some(texture_info) = material.pbr_metallic_roughness().base_color_texture() {
-            let texture = texture_info.texture();
-            let _name = texture_info.texture().source().name();
-            // log::trace!("Image name: {:?}", name);
-            // log::trace!("Image index: {}", texture.index());
-            let image = &images[texture.index()];
-            // log::trace!("Image size: {}", image.pixels.len());
-            out_image = image.pixels.clone();
-            image_width = image.width;
-            image_height = image.height;
-            // log::trace!("Image format: {:?}", image.format);
-            let _format = match image.format {
-                Format::R8G8B8A8 => WebGlRenderingContext::RGBA,
-                _ => {
-                    log::warn!("Format not supported!");
-                    WebGlRenderingContext::RGBA
-                },
-            };
-        }
-
-        let renderer = ShapeRenderer::new(&name, gl, gob, out_image, image_width, image_height)?;
-        cache.insert(name.clone(), renderer);
     }
     Ok(cache)
 }

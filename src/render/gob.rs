@@ -1,58 +1,67 @@
 use crate::{error::{CmcResult, CmcError}};
 use std::collections::HashMap;
 use gltf::{mesh::{Primitive, Semantic}, accessor::{Accessor, DataType}};
+use web_sys::WebGlRenderingContext as GL;
 
 #[derive(Debug)]
 pub struct Gob {
     pub accessors: HashMap<GobDataAttribute, GobDataAccess>,
     pub buffers: HashMap<usize, GobBuffer>,
-    //image_info: Somethinghere
     pub images: HashMap<usize, GobImage>,
 }
 
 impl Gob {
-    pub fn new(primitive: &Primitive, avail_buffers: &Vec<GobBuffer>) -> CmcResult<Gob> {
-    let mut accessors = HashMap::new();
-    let mut gob_buffers = HashMap::new();
-    for (sem, attr) in primitive.attributes() {
-        let gob_attribute = GobDataAttribute::from(&sem);
-        if let GobDataAttribute::Unhandled = gob_attribute {
-            log::warn!("Semantic: {:?} unhandled", sem);
-            continue;
-        }
-        let acc = GobDataAccess::from_accessor(&sem, &attr);
-        let buffer_index = acc.buffer_index;
-        if !gob_buffers.contains_key(&buffer_index) {
-            if avail_buffers.len() <= buffer_index {
-                log::error!("Buffer index not present in available buffers!");
-                Err(CmcError::missing_val("Missing buffer index!"))?;
+    pub fn new(primitive: &Primitive, avail_buffers: &Vec<GobBuffer>, avail_images: &Vec<GobImage>) -> CmcResult<Gob> {
+        let mut accessors = HashMap::new();
+        let mut gob_buffers = HashMap::new();
+        for (sem, attr) in primitive.attributes() {
+            let gob_attribute = GobDataAttribute::from(&sem);
+            if let GobDataAttribute::Unhandled = gob_attribute {
+                log::warn!("Semantic: {:?} unhandled", sem);
+                continue;
             }
-            gob_buffers.insert(acc.buffer_index, avail_buffers[buffer_index].clone());
+            let acc = GobDataAccess::from_accessor(&sem, &attr);
+            let buffer_index = acc.buffer_index;
+            if !gob_buffers.contains_key(&buffer_index) {
+                if avail_buffers.len() <= buffer_index {
+                    log::error!("Buffer index not present in available buffers!");
+                    Err(CmcError::missing_val("Missing buffer index!"))?;
+                }
+                gob_buffers.insert(acc.buffer_index, avail_buffers[buffer_index].clone());
+            }
+            accessors.insert(gob_attribute, acc);
         }
-        accessors.insert(gob_attribute, acc);
-    }
-    if let Some(index_acc) = primitive.indices() {
-        let mut attr = GobDataAccess::new(GobDataAttribute::Indices, &index_acc);
-        let offset = attr.offset as usize;
-        let size = index_acc.view().ok_or(CmcError::missing_val("No view for index accessor"))?.length();
-        if avail_buffers.len() <= attr.buffer_index {
-            log::error!("No matching buffer for indices");
-            Err(CmcError::missing_val("Missing buffer index"))?;
+        if let Some(index_acc) = primitive.indices() {
+            let mut attr = GobDataAccess::new(GobDataAttribute::Indices, &index_acc);
+            let offset = attr.offset as usize;
+            let size = index_acc.view().ok_or(CmcError::missing_val("No view for index accessor"))?.length();
+            if avail_buffers.len() <= attr.buffer_index {
+                log::error!("No matching buffer for indices");
+                Err(CmcError::missing_val("Missing buffer index"))?;
+            }
+            let copied_data = avail_buffers[attr.buffer_index].copy_from_buffer(offset, size)?;
+            let new_gob_buffer = GobBuffer::new(copied_data, GobBufferTarget::ElementArray);
+            gob_buffers.insert(std::usize::MAX, new_gob_buffer);
+            attr.buffer_index = std::usize::MAX;
+            attr.offset = 0;
+            accessors.insert(GobDataAttribute::Indices, attr);
         }
-        let copied_data = avail_buffers[attr.buffer_index].copy_from_buffer(offset, size)?;
-        let new_gob_buffer = GobBuffer::new(copied_data, GobBufferTarget::ElementArray);
-        gob_buffers.insert(std::usize::MAX, new_gob_buffer);
-        attr.buffer_index = std::usize::MAX;
-        attr.offset = 0;
-        accessors.insert(GobDataAttribute::Indices, attr);
-    }
 
-    Ok(Gob {
-        accessors,
-        buffers: gob_buffers,
-        images: HashMap::new()
-    })
-}
+        let material = primitive.material();
+        let mut gob_images = HashMap::new();
+        if let Some(texture_info) = material.pbr_metallic_roughness().base_color_texture() {
+            let image_index = texture_info.texture().index();
+            if image_index < avail_images.len() {
+                gob_images.insert(image_index, avail_images[image_index].clone());
+            }
+        }
+
+        Ok(Gob {
+            accessors,
+            buffers: gob_buffers,
+            images: gob_images,
+        })
+    }
 
 }
 
@@ -64,7 +73,6 @@ pub enum GobBufferTarget {
 
 impl GobBufferTarget {
     pub fn to_gl(&self) -> u32 {
-        use web_sys::WebGlRenderingContext as GL;
         match self {
             Self::Array => GL::ARRAY_BUFFER,
             Self::ElementArray => GL::ELEMENT_ARRAY_BUFFER,
@@ -92,11 +100,44 @@ impl GobBuffer {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct GobImage {
-    pub image_height: u32,
-    pub image_width: u32,
+    pub target: u32,
+    pub level: i32,
+    pub internal_format: i32,
+    pub height: i32,
+    pub width: i32,
+    pub format: u32,
+    pub border: i32,
+    pub data_type: u32,
     pub data: Vec<u8>,
+}
+
+impl From<&(png::OutputInfo, Vec<u8>)> for GobImage {
+    fn from(input: &(png::OutputInfo, Vec<u8>)) -> Self {
+        let info = &input.0;
+        use png::ColorType::*;
+        use png::BitDepth::*;
+        let (format, data_type) = match (info.color_type, info.bit_depth) {
+            (RGB, _) => (GL::RGB, GL::UNSIGNED_BYTE),
+            (RGBA, Four) => (GL::RGBA, GL::UNSIGNED_SHORT_4_4_4_4),
+            (RGBA, _) => (GL::RGBA, GL::UNSIGNED_BYTE),
+            (Indexed, _) => (GL::LUMINANCE, GL::UNSIGNED_BYTE),//Not right, don't know how likely it is though
+            (Grayscale, _) => (GL::LUMINANCE, GL::UNSIGNED_BYTE),
+            (GrayscaleAlpha, _) => (GL::LUMINANCE_ALPHA, GL::UNSIGNED_BYTE),
+        };
+        Self {
+            target: GL::TEXTURE_2D,
+            height: info.height as i32,
+            width: info.width as i32,
+            format,
+            border: 0,
+            internal_format: GL::RGBA as i32,
+            data_type,
+            data: input.1.clone(),
+            level: 0,
+        }
+    }
 }
 
 #[derive(Debug, Eq, Hash, PartialEq)]
@@ -163,7 +204,6 @@ impl GobDataAccess {
 }
 
 fn gltf_type_to_gl_type(input: DataType) -> u32 {
-    use web_sys::WebGlRenderingContext as GL;
     use DataType::*;
     match input {
         I8 => GL::BYTE,
