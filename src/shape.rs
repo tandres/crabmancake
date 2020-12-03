@@ -1,4 +1,4 @@
-use crate::{render::ShapeRenderer, entity::Entity, scene::Scene};
+use crate::{render::{Light, ShapeRenderer}, entity::Entity, scene::Scene};
 use web_sys::WebGlRenderingContext;
 use std::rc::Rc;
 
@@ -16,8 +16,8 @@ impl Shape {
         Self { renderer, entity }
     }
 
-    pub fn render(&self, gl: &WebGlRenderingContext, scene: &Scene) {
-        self.renderer.render(gl, scene, &self.entity.location, &self.entity.rotation)
+    pub fn render(&self, gl: &WebGlRenderingContext, scene: &Scene, lights: &Vec<Light>) {
+        self.renderer.render(gl, scene, lights, &self.entity.location, &self.entity.rotation)
     }
 
 

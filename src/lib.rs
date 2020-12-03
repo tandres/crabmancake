@@ -121,9 +121,9 @@ impl CmcClient {
             // Light::new_spot(light_location, [0.,-10.,0.], [1.,1.,1.], state.limit - 0.5, state.limit, 10.0, attenuator.clone()),
             // Light::new_spot([-5., 0., 0.], [0.,0.,0.], [0.5,0.5,0.5], state.limit, state.limit, 1.0, attenuator.clone()),
         ];
-        let scene = Scene::new(view, Vector3::new(eye.x, eye.y, eye.z), projection, lights);
+        let scene = Scene::new(view, Vector3::new(eye.x, eye.y, eye.z), projection);
         for shape in self.shapes.iter() {
-            shape.render(&self.web_gl, &scene)
+            shape.render(&self.web_gl, &scene, &lights)
         }
     }
 }

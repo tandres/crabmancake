@@ -264,6 +264,7 @@ impl ShapeRenderer {
         &self,
         gl: &WebGlRenderingContext,
         scene: &Scene,
+        lights: &Vec<Light>,
         location: &Vector3<f32>,
         rotation: &Vector3<f32>,
     ) {
@@ -284,7 +285,7 @@ impl ShapeRenderer {
         let model_mat = Isometry3::new(location.clone(), rotation.clone()).to_homogeneous();
         self.scene.populate_with(gl, scene, &model_mat);
 
-        for (index, light) in scene.lights.iter().enumerate() {
+        for (index, light) in lights.iter().enumerate() {
             self.lights[index].populate_with(gl, light);
         }
 
