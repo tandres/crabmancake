@@ -1,5 +1,4 @@
-use crate::{render::{Light, ShapeRenderer}, entity::Entity};
-use nalgebra::{Isometry3, Perspective3, Vector3};
+use crate::{render::ShapeRenderer, entity::Entity, scene::Scene};
 use web_sys::WebGlRenderingContext;
 use std::rc::Rc;
 
@@ -17,8 +16,8 @@ impl Shape {
         Self { renderer, entity }
     }
 
-    pub fn render(&self, gl: &WebGlRenderingContext, view: &Isometry3<f32>, eye: &Vector3<f32>, projection: &Perspective3<f32>, lights: &Vec<Light>) {
-        self.renderer.render(gl, view, eye, projection, &self.entity.location, &self.entity.rotation, lights)
+    pub fn render(&self, gl: &WebGlRenderingContext, scene: &Scene) {
+        self.renderer.render(gl, scene, &self.entity.location, &self.entity.rotation)
     }
 
 

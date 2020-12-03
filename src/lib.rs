@@ -1,4 +1,4 @@
-use crate::{entity::Entity, shape::Shape, error::CmcError, render::{RenderCache, Light}};
+use crate::{scene::Scene, entity::Entity, shape::Shape, error::CmcError, render::{RenderCache, Light}};
 use log::{trace, debug};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
@@ -12,6 +12,7 @@ const GIT_VERSION: &str = git_version::git_version!();
 mod entity;
 mod error;
 mod render;
+mod scene;
 mod shape;
 mod state;
 mod assets;
@@ -120,8 +121,9 @@ impl CmcClient {
             // Light::new_spot(light_location, [0.,-10.,0.], [1.,1.,1.], state.limit - 0.5, state.limit, 10.0, attenuator.clone()),
             // Light::new_spot([-5., 0., 0.], [0.,0.,0.], [0.5,0.5,0.5], state.limit, state.limit, 1.0, attenuator.clone()),
         ];
+        let scene = Scene::new(view, Vector3::new(eye.x, eye.y, eye.z), projection, lights);
         for shape in self.shapes.iter() {
-            shape.render(&self.web_gl, &view, &Vector3::new(eye.x, eye.y, eye.z), &projection, &lights)
+            shape.render(&self.web_gl, &scene)
         }
     }
 }

@@ -1,7 +1,7 @@
-use crate::error::{CmcError, CmcResult};
+use crate::{scene::Scene, error::{CmcError, CmcResult}};
 use super::{Light, common::build_program, gob::{Gob, GobDataAttribute}};
 use js_sys::WebAssembly;
-use nalgebra::{Isometry3, Perspective3, Vector3};
+use nalgebra::{Isometry3, Vector3, Matrix4};
 use std::collections::HashMap;
 use wasm_bindgen::JsCast;
 use web_sys::WebGlRenderingContext as WebGL;
@@ -145,16 +145,53 @@ impl RenderLight {
     }
 }
 
-pub struct ShapeRenderer {
-    pub name: String,
-    program: WebGlProgram,
-    gob: Gob,
-    geometry_buffers: HashMap<usize, WebGlBuffer>,
+pub struct RenderScene {
     u_model: WebGlUniformLocation,
     u_view: WebGlUniformLocation,
     u_projection: WebGlUniformLocation,
     u_ambient_light: WebGlUniformLocation,
     u_eye: WebGlUniformLocation,
+}
+
+impl RenderScene {
+    fn new(gl: &WebGlRenderingContext, program: &WebGlProgram) -> CmcResult<Self> {
+        let u_model = gl.get_uniform_location(&program, "uModel")
+            .ok_or(CmcError::missing_val("uModel"))?;
+        let u_view = gl.get_uniform_location(&program, "uView")
+            .ok_or(CmcError::missing_val("uView"))?;
+        let u_projection = gl.get_uniform_location(&program, "uProjection")
+            .ok_or(CmcError::missing_val("uProjection"))?;
+
+        let u_eye = gl.get_uniform_location(&program, "uEyeLocation")
+            .ok_or(CmcError::missing_val("uEyeLocation"))?;
+        let u_ambient_light = gl.get_uniform_location(&program, "uAmbientLight")
+            .ok_or(CmcError::missing_val("uAmbientLight"))?;
+        Ok(Self {
+            u_model,
+            u_view,
+            u_eye,
+            u_projection,
+            u_ambient_light,
+        })
+    }
+
+    fn populate_with(&self, gl: &WebGlRenderingContext, external_scene: &Scene, model_mat: &Matrix4<f32>) {
+        gl.uniform_matrix4fv_with_f32_array(Some(&self.u_model), false, model_mat.as_slice());
+        gl.uniform_matrix4fv_with_f32_array(Some(&self.u_view), false, external_scene.get_view_as_vec().as_slice());
+        gl.uniform_matrix4fv_with_f32_array(Some(&self.u_projection), false, external_scene.get_projection_as_vec().as_slice());
+        gl.uniform3fv_with_f32_array(Some(&self.u_eye), external_scene.get_eye_as_vec().as_slice());
+
+        let ambient_light = vec![0.1, 0.1, 0.1];
+        gl.uniform3fv_with_f32_array(Some(&self.u_ambient_light), ambient_light.as_slice());
+    }
+}
+
+pub struct ShapeRenderer {
+    pub name: String,
+    program: WebGlProgram,
+    gob: Gob,
+    geometry_buffers: HashMap<usize, WebGlBuffer>,
+    scene: RenderScene,
     lights: Vec<RenderLight>,
     textures: Vec<(WebGlTexture, WebGlUniformLocation, u32)>,
 }
@@ -173,21 +210,18 @@ impl ShapeRenderer {
         let program = build_program(gl, VERT_SHADER, FRAG_SHADER)?;
         let mut geometry_buffers = HashMap::new();
         let js_memory = wasm_bindgen::memory().dyn_into::<WebAssembly::Memory>()?.buffer();
-        let js_memory_2 = js_sys::Uint8Array::new(&js_memory);
+        let js_memory = js_sys::Uint8Array::new(&js_memory);
         for (index, gob_buffer) in gob.buffers.iter() {
-            log::debug!("Index: {}", index);
             let gb_slice = gob_buffer.data.as_slice();
             let gb_location = gb_slice.as_ptr() as u32;
             let gb_len = (gb_slice.len() * std::mem::size_of::<u8>()) as u32;
-            let js_buf = js_memory_2.subarray(gb_location, gb_location + gb_len);
-            log::debug!("JS_BUF: {:X?}", js_buf.to_vec().as_slice());
+            let js_buf = js_memory.subarray(gb_location, gb_location + gb_len);
             let gl_buf = gl.create_buffer()
                 .ok_or(CmcError::missing_val(format!("Failed to create buffer index: {}", index)))?;
             gl.bind_buffer(gob_buffer.target.to_gl(), Some(&gl_buf));
             gl.buffer_data_with_array_buffer_view(gob_buffer.target.to_gl(), &js_buf, WebGL::STATIC_DRAW);
             geometry_buffers.insert(*index, gl_buf);
         }
-        log::debug!("Buffers: {}", geometry_buffers.len());
 
         for (attr, gob_data_access) in gob.accessors.iter_mut() {
             gob_data_access.gl_attribute_index = attr_location(&attr);
@@ -209,46 +243,29 @@ impl ShapeRenderer {
             gl.generate_mipmap(image.target);
             textures.push((texture, u_texture, image.target));
         }
-        let u_model = gl.get_uniform_location(&program, "uModel")
-            .ok_or(CmcError::missing_val("uModel"))?;
-
-        let u_view = gl.get_uniform_location(&program, "uView")
-            .ok_or(CmcError::missing_val("uView"))?;
-        let u_projection = gl.get_uniform_location(&program, "uProjection")
-            .ok_or(CmcError::missing_val("uProjection"))?;
-
-        let u_eye = gl.get_uniform_location(&program, "uEyeLocation")
-            .ok_or(CmcError::missing_val("uEyeLocation"))?;
-        let u_ambient_light = gl.get_uniform_location(&program, "uAmbientLight")
-            .ok_or(CmcError::missing_val("uAmbientLight"))?;
         let mut lights: Vec<RenderLight> = Vec::new();
         for i in 0..MAX_LIGHTS {
             lights.push(RenderLight::new_at_index(gl, &program, "spot_lights", i)?);
         }
+
+        let scene = RenderScene::new(gl, &program)?;
         Ok(ShapeRenderer {
             name: name.clone(),
             gob,
             program,
             geometry_buffers,
-            u_model,
-            u_view,
-            u_projection,
-            u_ambient_light,
             lights,
-            u_eye,
             textures,
+            scene,
         })
     }
 
     pub fn render(
         &self,
         gl: &WebGlRenderingContext,
-        view: &Isometry3<f32>,
-        eye: &Vector3<f32>,
-        projection: &Perspective3<f32>,
+        scene: &Scene,
         location: &Vector3<f32>,
         rotation: &Vector3<f32>,
-        lights: &Vec<Light>,
     ) {
         gl.use_program(Some(&self.program));
         for (_key, gob_acc) in self.gob.accessors.iter().filter(|v| *v.0 != GobDataAttribute::Indices) {
@@ -265,16 +282,9 @@ impl ShapeRenderer {
         }
 
         let model_mat = Isometry3::new(location.clone(), rotation.clone()).to_homogeneous();
-        let projection_mat = projection.to_homogeneous();
-        let view_mat = view.to_homogeneous();
-        gl.uniform_matrix4fv_with_f32_array(Some(&self.u_model), false, model_mat.as_slice());
-        gl.uniform_matrix4fv_with_f32_array(Some(&self.u_view), false, view_mat.as_slice());
-        gl.uniform_matrix4fv_with_f32_array(Some(&self.u_projection), false, projection_mat.as_slice());
-        gl.uniform3fv_with_f32_array(Some(&self.u_eye), eye.as_slice());
+        self.scene.populate_with(gl, scene, &model_mat);
 
-        let ambient_light = vec![0.1, 0.1, 0.1];
-        gl.uniform3fv_with_f32_array(Some(&self.u_ambient_light), ambient_light.as_slice());
-        for (index, light) in lights.iter().enumerate() {
+        for (index, light) in scene.lights.iter().enumerate() {
             self.lights[index].populate_with(gl, light);
         }
 
