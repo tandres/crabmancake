@@ -1,4 +1,4 @@
-use crate::{entity::Entity, shape::Shape, error::CmcError, render::{RenderCache, ShapeRenderer, Light}};
+use crate::{scene::Scene, entity::Entity, shape::Shape, error::CmcError, render::RenderCache, light::{Attenuator, Light}};
 use log::{trace, debug};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
@@ -6,33 +6,38 @@ use wasm_bindgen::prelude::*;
 use web_sys::{Document, Element, HtmlCanvasElement, HtmlInputElement, WebGlRenderingContext as WebGL};
 use js_sys::Function;
 use nalgebra::{Isometry3, Perspective3, Point3, Vector3};
-use include_dir::{include_dir, Dir};
 
 const GIT_VERSION: &str = git_version::git_version!();
 
 mod entity;
 mod error;
 mod render;
+mod scene;
 mod shape;
 mod state;
-
-const MODEL_DIR: Dir = include_dir!("models/");
+mod assets;
+mod light;
 
 #[wasm_bindgen]
 pub struct CmcClient {
     web_gl: WebGL,
     #[allow(dead_code)]
     rendercache: RenderCache,
-    shapes: Vec<Shape<ShapeRenderer>>,
+    shapes: Vec<Shape>,
+    lights: Vec<Light>,
 }
 
 #[wasm_bindgen]
 impl CmcClient {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> Result<CmcClient, JsValue> {
+    pub async fn new() -> Result<CmcClient, JsValue> {
         let window = web_sys::window().expect("no global `window` exists");
+        let location = window.location();
         let document: Document = window.document().expect("should have a document on window");
         let body = document.body().expect("No body!");
+
+        let models = assets::load_models(location.origin()?, &window).await?;
+
         let (label, slider) = create_slider(&document, "X", 0.0..360.0, 0.0, |x| state::update_shape_rotation(0, x))?;
         body.append_child(&label)?;
         body.append_child(&slider)?;
@@ -62,24 +67,33 @@ impl CmcClient {
         body.append_child(&slider)?;
 
         let gl = setup_gl_context(&document, true)?;
-        let rendercache = render::build_rendercache(&gl, &MODEL_DIR).expect("Failed to create rendercache");
+        let rendercache = render::build_rendercache(&gl, &models).expect("Failed to create rendercache");
         log::info!("Available shapes");
         for key in rendercache.shape_renderers.keys() {
             log::info!("{}", key);
         }
         let mut shapes = Vec::new();
         let entity = Entity::new_at(Vector3::new(0.,0.,0.));
-        let cube_renderer = rendercache.get_shaperenderer("Cube_textured_glb").expect("Failed to get renderer");
+        let cube_renderer = rendercache.get_shaperenderer("Cube.001_glb").expect("Failed to get renderer");
         shapes.push(Shape::new(cube_renderer, entity));
+
+        let lights = vec![
+            // Light::new_point([0.,0.,0.], [1., 1., 1.], 5.0, Attenuator::new_7m()),
+            Light::new_spot([0.,1.,0.], [0.,1.,0.], [1.,1.,1.], 180., 180., 10.0, Attenuator::new_7m()),
+            // Light::new_spot([-5., 0., 0.], [0.,0.,0.], [0.5,0.5,0.5], state.limit, state.limit, 1.0, attenuator.clone()),
+        ];
         let client = CmcClient {
             web_gl: gl,
             rendercache,
             shapes,
+            lights,
         };
         Ok(client)
     }
 
     pub fn update(&mut self, elapsed_time: f32, height: f32, width: f32) -> Result<(), JsValue> {
+        let state = state::get_curr();
+        self.lights[0].set_location(state.light_location);
         let delta_t = state::update(elapsed_time, height, width);
         let rotations = state::get_curr().rotations;
         let rotations = Vector3::new(
@@ -111,14 +125,9 @@ impl CmcClient {
         let view   = Isometry3::look_at_rh(&eye, &target, &Vector3::y());
 
         let projection = Perspective3::new(aspect, FIELD_OF_VIEW, Z_NEAR, Z_FAR);
-        let attenuator = [1.0, 0.7, 1.8];
-        let light_location = state.light_location.clone();
-        let lights = vec![
-            Light::new_point(light_location, [1., 1., 1.], 5.0, attenuator.clone()),
-            Light::new_spot([-5., 0., 0.], [0.,0.,0.], [0.5,0.5,0.5], state.limit, state.limit + 1., 1.0, attenuator.clone()),
-        ];
+        let scene = Scene::new(view, Vector3::new(eye.x, eye.y, eye.z), projection);
         for shape in self.shapes.iter() {
-            shape.render(&self.web_gl, &view, &Vector3::new(eye.x, eye.y, eye.z), &projection, &lights)
+            shape.render(&self.web_gl, &scene, &self.lights)
         }
     }
 }
@@ -215,3 +224,4 @@ where
     html_input.add_event_listener_with_callback("input", &Function::from(handler.into_js_value()))?;
     Ok((html_label, html_input))
 }
+
