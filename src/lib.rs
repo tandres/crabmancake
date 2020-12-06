@@ -74,7 +74,7 @@ impl CmcClient {
         }
         let mut shapes = Vec::new();
         let entity = Entity::new_at(Vector3::new(0.,0.,0.));
-        let cube_renderer = rendercache.get_shaperenderer("Plane_glb").expect("Failed to get renderer");
+        let cube_renderer = rendercache.get_shaperenderer("Cube.001_glb").expect("Failed to get renderer");
         shapes.push(Shape::new(cube_renderer, entity));
 
         let lights = vec![
