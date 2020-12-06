@@ -1,6 +1,5 @@
 use crate::{assets::Model, error::{CmcResult, CmcError}};
 use gob::{Gob, GobBuffer, GobBufferTarget, GobImage};
-use nalgebra::Vector3;
 use std::{collections::HashMap, rc::Rc};
 use web_sys::*;
 use png::OutputInfo;
@@ -11,37 +10,6 @@ mod common;
 mod gob;
 
 pub use shape::ShapeRenderer;
-
-pub enum Light {
-    Spot {
-        color: Vector3<f32>,
-        location: Vector3<f32>,
-        direction: Vector3<f32>,
-        inner_limit: f32,
-        outer_limit: f32,
-
-        intensity: f32,
-
-        attenuator: [f32; 3],
-    },
-}
-
-impl Light {
-    pub fn new_point(location: [f32; 3], color: [f32; 3], intensity: f32, attenuator: [f32; 3]) -> Self {
-        Self::new_spot(location, [0.; 3], color, 180.0, 180.0, intensity, attenuator)
-    }
-
-    pub fn new_spot(location: [f32; 3], pointing_at: [f32; 3], color: [f32; 3], inner_limit: f32, outer_limit: f32, intensity: f32, attenuator: [f32; 3]) -> Self {
-        let location = Vector3::from(location);
-        let direction = Vector3::from(pointing_at) - location;
-        let color = Vector3::from(color);
-        let outer_limit = f32::cos(std::f32::consts::PI * outer_limit / 180.);
-        let inner_limit = f32::cos(std::f32::consts::PI * inner_limit / 180.);
-        Light::Spot { location, color, direction, inner_limit, outer_limit, intensity, attenuator }
-    }
-
-}
-
 
 pub struct RenderCache {
     pub shape_renderers: HashMap<String, Rc<ShapeRenderer>>,

@@ -1,4 +1,4 @@
-use crate::{render::{Light, ShapeRenderer}, entity::Entity, scene::Scene};
+use crate::{light::Light, render::ShapeRenderer, entity::Entity, scene::Scene};
 use web_sys::WebGlRenderingContext;
 use std::rc::Rc;
 

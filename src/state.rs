@@ -133,6 +133,7 @@ pub fn update_light_location(index: usize, value: f64) {
     let mut data = APP_STATE.lock().unwrap();
     let mut light_location = data.light_location.clone();
     light_location[index] = value as f32;
+    log::info!("Light location: {}, {}, {}", light_location[0], light_location[1], light_location[2]);
     *data = Arc::new(AppState {
         light_location,
         ..*data.clone()

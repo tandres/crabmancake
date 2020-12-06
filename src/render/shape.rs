@@ -1,5 +1,5 @@
-use crate::{scene::Scene, error::{CmcError, CmcResult}};
-use super::{Light, common::build_program, gob::{Gob, GobDataAttribute}};
+use crate::{scene::Scene, error::{CmcError, CmcResult}, light::Light};
+use super::{common::build_program, gob::{Gob, GobDataAttribute}};
 use js_sys::WebAssembly;
 use nalgebra::{Isometry3, Vector3, Matrix4};
 use std::collections::HashMap;
@@ -124,24 +124,20 @@ impl RenderLight {
     }
 
     fn populate_with(&self, gl: &WebGlRenderingContext, source_light: &Light) {
-        match source_light {
-            Light::Spot{ color, location, direction, inner_limit, outer_limit, intensity, attenuator } => {
-                let color_location = &self.color;
-                let location_location = &self.location;
-                let direction_location = &self.direction;
-                let inner_limit_location = &self.inner_limit;
-                let outer_limit_location = &self.outer_limit;
-                let intensity_location = &self.intensity;
-                let attenuator_location = &self.attenuator;
-                gl.uniform3fv_with_f32_array(Some(color_location), color.as_slice());
-                gl.uniform3fv_with_f32_array(Some(location_location), location.as_slice());
-                gl.uniform3fv_with_f32_array(Some(direction_location), direction.as_slice());
-                gl.uniform1f(Some(inner_limit_location), *inner_limit);
-                gl.uniform1f(Some(outer_limit_location), *outer_limit);
-                gl.uniform1f(Some(intensity_location), *intensity);
-                gl.uniform3fv_with_f32_array(Some(attenuator_location), &attenuator[..]);
-            },
-        }
+        let color_location = &self.color;
+        let location_location = &self.location;
+        let direction_location = &self.direction;
+        let inner_limit_location = &self.inner_limit;
+        let outer_limit_location = &self.outer_limit;
+        let intensity_location = &self.intensity;
+        let attenuator_location = &self.attenuator;
+        gl.uniform3fv_with_f32_array(Some(color_location), source_light.color.as_slice());
+        gl.uniform3fv_with_f32_array(Some(location_location), source_light.location.as_slice());
+        gl.uniform3fv_with_f32_array(Some(direction_location), source_light.direction.as_slice());
+        gl.uniform1f(Some(inner_limit_location), source_light.inner_limit);
+        gl.uniform1f(Some(outer_limit_location), source_light.outer_limit);
+        gl.uniform1f(Some(intensity_location), source_light.intensity);
+        gl.uniform3fv_with_f32_array(Some(attenuator_location), source_light.attenuator.as_slice());
     }
 }
 

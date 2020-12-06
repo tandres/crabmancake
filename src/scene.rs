@@ -18,7 +18,7 @@ impl Scene {
     }
 
     pub fn get_eye_as_vec(&self) -> Vec<f32> {
-        self.eye.to_homogeneous().as_slice().to_vec()
+        self.eye.as_slice().to_vec()
     }
 
     pub fn get_projection_as_vec(&self) -> Vec<f32> {
