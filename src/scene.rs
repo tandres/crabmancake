@@ -1,23 +1,31 @@
+use crate::key_state::KeyState;
 use nalgebra::{Isometry3, Matrix3x1, Perspective3, Point3, Unit, UnitQuaternion, Vector3};
 
 pub const FIELD_OF_VIEW: f32 = 45. * std::f32::consts::PI / 180.; //in radians
 pub const Z_FAR: f32 = 1000.;
 pub const Z_NEAR: f32 = 1.0;
 
+const MAX_SPEED: f32 = 0.25;
+
 #[derive(Clone)]
 pub struct Scene {
     eye: Point3<f32>,
     look_dir: Vector3<f32>,
+    look_dir_left: Vector3<f32>,
+    look_dir_up: Vector3<f32>,
     width: f32,
     height: f32,
 }
 
 impl Scene {
-    pub fn new(look_dir: [f32; 3], eye: [f32; 3], width: f32, height: f32) -> Self {
-        let look_dir = Vector3::from(look_dir);
+    pub fn new(eye: [f32; 3], width: f32, height: f32) -> Self {
+        let look_dir = Vector3::from([1.,0.,0.]);
+        let look_dir_left = Vector3::from([0.,0.,1.]);
+        let look_dir_up = Vector3::from([0.,1.,0.]);
+
         let eye = Point3::from(eye);
         Self {
-            eye, look_dir, width, height,
+            eye, look_dir, look_dir_left, look_dir_up, width, height,
         }
     }
 
@@ -39,7 +47,8 @@ impl Scene {
     }
 
     pub fn move_relative(&mut self, offset: [f32; 3]) {
-        self.eye += Vector3::from(offset)
+        let new_position = self.eye + Vector3::from(offset);
+        self.eye = new_position;
     }
 
     pub fn move_absolute(&mut self, position: [f32; 3]) {
@@ -50,15 +59,36 @@ impl Scene {
         let sensi = 1. / 100.;
         let x_rot_angle = sensi * rotations[1];
         let y_rot_angle = sensi * rotations[0];
-        let x_axis = self.look_dir.cross(&Vector3::y());
-        let uq_y = UnitQuaternion::from_axis_angle(&Unit::new_normalize(Vector3::y()), y_rot_angle);
-        let uq_x = UnitQuaternion::from_axis_angle(&Unit::new_normalize(x_axis), x_rot_angle);
-        // let rot = Isometry3::rotation(Vector3::from(rotations));
+        let uq_y = UnitQuaternion::from_axis_angle(&Unit::new_normalize(self.look_dir_up), y_rot_angle);
+        let uq_x = UnitQuaternion::from_axis_angle(&Unit::new_normalize(self.look_dir_left), x_rot_angle);
         self.look_dir = uq_y * uq_x * self.look_dir;
+        self.look_dir_left = uq_y * uq_x * self.look_dir_left;
+        self.look_dir_up = uq_y * uq_x * self.look_dir_up;
     }
 
     pub fn update_aspect(&mut self, width: f32, height: f32) {
         self.width = width;
         self.height = height;
+    }
+
+    pub fn update_from_key_state(&mut self, key_state: &KeyState) {
+        let fwbw = match (key_state.forward, key_state.backward) {
+            (true, true) | (false, false) => 0.,
+            (true, false) => 1.,
+            (false, true) => -1.,
+        };
+        let lr = match (key_state.left, key_state.right) {
+            (true, true) | (false, false) => 0.,
+            (true, false) => -1.,
+            (false, true) => 1.,
+        };
+        if fwbw == 0. && lr == 0. {
+            return;
+        }
+        let fwbw : Vector3<f32> = fwbw * self.look_dir;
+        let lr = lr * self.look_dir_left;
+        let movement_vec = Vector3::from(fwbw + lr).normalize();
+        let movement_vec = MAX_SPEED * movement_vec;
+        self.move_relative([movement_vec.x, movement_vec.y, movement_vec.z]);
     }
 }

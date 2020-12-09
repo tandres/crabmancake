@@ -10,10 +10,12 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::RwLock;
+use key_state::KeyState;
 
 const GIT_VERSION: &str = git_version::git_version!();
 const RUST_CANVAS: &str = "rustCanvas";
 
+mod key_state;
 mod entity;
 mod error;
 mod render;
@@ -34,6 +36,7 @@ pub struct CmcClient {
     document: Rc<Document>,
     canvas: Rc<HtmlCanvasElement>,
     scene: Arc<RwLock<Scene>>,
+    key_state: Arc<RwLock<KeyState>>,
 }
 
 #[wasm_bindgen]
@@ -87,7 +90,7 @@ impl CmcClient {
         let cube_renderer = rendercache.get_shaperenderer("Cube.001_glb").expect("Failed to get renderer");
         shapes.push(Shape::new(cube_renderer, entity));
 
-        let scene = Arc::new(RwLock::new(Scene::new([0., 0., -1.], [3., 2., 3.], 640., 480.)));
+        let scene = Arc::new(RwLock::new(Scene::new([-3., 2., 3.], 640., 480.)));
         let lights = vec![
             // Light::new_point([0.,0.,0.], [1., 1., 1.], 5.0, Attenuator::new_7m()),
             Light::new_spot([0.,1.,0.], [0.,1.,0.], [1.,1.,1.], 180., 180., 10.0, Attenuator::new_7m()),
@@ -102,6 +105,7 @@ impl CmcClient {
             document,
             canvas,
             scene,
+            key_state: Arc::new(RwLock::new(KeyState::new())),
         };
 
         attach_mouse_onclick_handler(&mut client)?;
@@ -120,10 +124,17 @@ impl CmcClient {
             rotations[1] as f32 * std::f32::consts::PI / 180.,
             rotations[2] as f32 * std::f32::consts::PI / 180.,
         );
+        let key_state = self.key_state.read().unwrap().clone();
+        {
+            let mut key_state = self.key_state.write().unwrap();
+            key_state.clear();
+        }
         {
             let mut scene = self.scene.write().unwrap();
             scene.update_aspect(width, height);
+            scene.update_from_key_state(&key_state);
         }
+
         for shape in self.shapes.iter_mut() {
             crate::entity::update(&mut shape.entity, delta_t);
             crate::entity::set_rotation(&mut shape.entity, rotations);
@@ -218,25 +229,44 @@ fn attach_pointerlock_handler(client: &mut CmcClient) -> Result<(), JsValue> {
                 let mut scene = scene_clone.write().unwrap();
                 scene.mouse_rotate([x, y, 0.]);
             }
-            // log::info!("Mouse: offsets: ({},{})", x, y);
         } else {
             log::warn!("Failed to convert event into mouseevent");
         }
     };
     let mousemove_callback = client.add_callback(mousemove_event, Box::new(mousemove_handler))?;
+
     let document = client.document.clone();
+    let keydown_event = "keydown";
+    let key_state_clone = client.key_state.clone();
+    let keydown_handler = move | event: Event| {
+        let event = event.dyn_into::<web_sys::KeyboardEvent>();
+        if let Ok(event) = event {
+            log::info!("Keydown event: {}", event.code());
+            key_state_clone.write().unwrap().set_key(event.code());
+        } else {
+            log::warn!("Failed to convert event into keyboardevent");
+        }
+    };
+    let keydown_callback = client.add_callback(keydown_event, Box::new(keydown_handler))?;
+
     let document_clone = client.document.clone();
     let pointerlockchange_handler = move |_event: Event| {
         let element = document_clone.pointer_lock_element();
         log::debug!("pointerlockchange");
         let result = if element.is_some() && element.unwrap().id().as_str() == RUST_CANVAS {
             log::debug!("Attaching mousemove handler");
-            attach_handler(document_clone.as_ref(), mousemove_event, mousemove_callback.clone())
+            vec![
+                attach_handler(document_clone.as_ref(), mousemove_event, mousemove_callback.clone()),
+                attach_handler(document_clone.as_ref(), keydown_event, keydown_callback.clone()),
+            ]
         } else {
             log::debug!("Detaching mousemove handler");
-            detach_handler(document_clone.as_ref(), mousemove_event, mousemove_callback.clone())
+            vec![
+                detach_handler(document_clone.as_ref(), mousemove_event, mousemove_callback.clone()),
+                detach_handler(document_clone.as_ref(), keydown_event, keydown_callback.clone()),
+            ]
         };
-        if let Err(e) = result {
+        if let Err(e) = result.into_iter().collect::<Result<Vec<()>, JsValue>>() {
             log::error!("Attach/Detach failed: {:?}", e);
         }
     };
