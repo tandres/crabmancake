@@ -2,7 +2,6 @@ use crate::{assets::Model, error::{CmcResult, CmcError}};
 use gob::{Gob, GobBuffer, GobBufferTarget, GobImage};
 use std::{collections::HashMap, rc::Rc};
 use web_sys::*;
-use png::OutputInfo;
 use gltf::mesh::Mesh;
 
 mod shape;
@@ -33,8 +32,7 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, models: &Vec<Model>) -> Cmc
     let mut shape_renderers = HashMap::new();
     for model in models {
         let (gltf, buffers, images) = (&model.gltf, &model.buffers, &model.images);
-        log::trace!("Gltf loaded, {} buffers and {} images", buffers.len(), images.len());
-        // trace!("Gltf contents: {:?}", gltf);
+        //log::trace!("Gltf loaded, {} buffers and {} images", buffers.len(), images.len());
         for mesh in gltf.meshes() {
             for (obj_name, renderer) in build_renderer_glb(gl, &mesh, buffers, images)? {
                 if let Some(old) = shape_renderers.insert(obj_name, Rc::new(renderer)) {
@@ -48,13 +46,12 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, models: &Vec<Model>) -> Cmc
     })
 }
 
-fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<Vec<u8>>, images: &Vec<(OutputInfo, Vec<u8>)>) -> CmcResult<HashMap<String, ShapeRenderer>> {
+fn build_renderer_glb(gl: &WebGlRenderingContext, object: &Mesh, buffers: &Vec<Vec<u8>>, images: &Vec<image::DynamicImage>) -> CmcResult<HashMap<String, ShapeRenderer>> {
     let name = object.name().ok_or(CmcError::missing_val("Glb mesh name")).unwrap();
     let name = format!("{}_{}", name, "glb");
     let mut cache = HashMap::new();
     let gob_buffers: Vec<GobBuffer> = buffers.iter().map(|b| GobBuffer::new(b.clone(), GobBufferTarget::Array)).collect();
     let gob_images: Vec<GobImage> = images.iter().map(|i| GobImage::from(i)).collect();
-    log::debug!("Gob buffers: {}", gob_buffers.len());
     for prim in object.primitives() {
         let gob = Gob::new(&prim, &gob_buffers, &gob_images);
         if let Ok(gob) = gob {

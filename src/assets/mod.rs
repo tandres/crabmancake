@@ -20,9 +20,7 @@ pub async fn load_models(server_root: String, window: &Window) -> CmcResult<Vec<
     for item in get_asset_list() {
         let path = Path::new(item);
         let uri = format!("{}/{}/{}",server_root, MODEL_DIR, item);
-        log::info!("{}", uri);
         let extension = path.extension().unwrap().to_str();
-        log::info!("Extension: {:?}", extension);
         if let Some("gltf") = extension {
             fetchers.push(build_fetcher(uri.clone(), window));
         }

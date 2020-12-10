@@ -87,14 +87,14 @@ impl CmcClient {
         }
         let mut shapes = Vec::new();
         let entity = Entity::new_at(Vector3::new(0.,0.,0.));
-        let cube_renderer = rendercache.get_shaperenderer("Cube.001_glb").expect("Failed to get renderer");
+        let cube_renderer = rendercache.get_shaperenderer("Suzanne_glb").expect("Failed to get renderer");
         shapes.push(Shape::new(cube_renderer, entity));
 
         let scene = Arc::new(RwLock::new(Scene::new([-3., 2., 3.], 640., 480.)));
         let lights = vec![
-            // Light::new_point([0.,0.,0.], [1., 1., 1.], 5.0, Attenuator::new_7m()),
-            Light::new_spot([0.,1.,0.], [0.,1.,0.], [1.,1.,1.], 180., 180., 10.0, Attenuator::new_7m()),
-            // Light::new_spot([-5., 0., 0.], [0.,0.,0.], [0.5,0.5,0.5], state.limit, state.limit, 1.0, attenuator.clone()),
+            Light::new_spot([0.,1.,0.], [0.,0.,0.], [1.,1.,1.], 90., 100., 10.0, Attenuator::new_7m()),
+            Light::new_point([5.,0.,0.], [1., 1., 1.], 5.0, Attenuator::new_7m()),
+            Light::new_point([-5.,0.,0.], [1.,1.,1.], 5.0, Attenuator::new_7m()),
         ];
         let mut client = CmcClient {
             web_gl: gl,
@@ -143,7 +143,6 @@ impl CmcClient {
     }
 
     pub fn render(&self) {
-        // trace!("Render called");
         self.web_gl.clear(WebGL::COLOR_BUFFER_BIT | WebGL::DEPTH_BUFFER_BIT);
         let scene = {
             self.scene.read().unwrap().clone()
@@ -161,7 +160,7 @@ impl CmcClient {
     fn add_callback(&mut self, event: &str, callback: Box<dyn FnMut(Event)>) -> Result<Rc<Closure<dyn FnMut(Event)>>, JsValue> {
         let callback = Rc::new(Closure::wrap(callback));
         self.callbacks.insert(event.to_string(), callback);
-        log::debug!("Total callbacks: {}", self.callbacks.len());
+        // log::debug!("Total callbacks: {}", self.callbacks.len());
         Ok(self.lookup_callback(event)
             .ok_or(CmcError::missing_val(format!("Couldn't retrieve {}", event)))?)
     }
