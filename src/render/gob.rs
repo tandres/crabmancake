@@ -2,6 +2,7 @@ use crate::{error::{CmcResult, CmcError}};
 use std::collections::HashMap;
 use gltf::{mesh::{Primitive, Semantic}, accessor::{Accessor, DataType}};
 use web_sys::WebGlRenderingContext as GL;
+use image::DynamicImage;
 
 #[derive(Debug)]
 pub struct Gob {
@@ -113,28 +114,24 @@ pub struct GobImage {
     pub data: Vec<u8>,
 }
 
-impl From<&(png::OutputInfo, Vec<u8>)> for GobImage {
-    fn from(input: &(png::OutputInfo, Vec<u8>)) -> Self {
-        let info = &input.0;
-        use png::ColorType::*;
-        use png::BitDepth::*;
-        let (format, data_type) = match (info.color_type, info.bit_depth) {
-            (RGB, _) => (GL::RGB, GL::UNSIGNED_BYTE),
-            (RGBA, Four) => (GL::RGBA, GL::UNSIGNED_SHORT_4_4_4_4),
-            (RGBA, _) => (GL::RGBA, GL::UNSIGNED_BYTE),
-            (Indexed, _) => (GL::LUMINANCE, GL::UNSIGNED_BYTE),//Not right, don't know how likely it is though
-            (Grayscale, _) => (GL::LUMINANCE, GL::UNSIGNED_BYTE),
-            (GrayscaleAlpha, _) => (GL::LUMINANCE_ALPHA, GL::UNSIGNED_BYTE),
+impl From<&DynamicImage> for GobImage {
+    fn from(input: &DynamicImage) -> Self {
+        let (width, height, data) = if let Some(image) = input.as_rgba8() {
+            (image.width(), image.height(), image.as_raw().clone())
+        } else {
+            log::warn!("Image was not in rgba8, making a copy to convert");
+            let image = input.clone().into_rgba8();
+            (image.width(), image.height(), image.as_raw().clone())
         };
         Self {
             target: GL::TEXTURE_2D,
-            height: info.height as i32,
-            width: info.width as i32,
-            format,
+            height: height as i32,
+            width: width as i32,
+            format: GL::RGBA,
             border: 0,
             internal_format: GL::RGBA as i32,
-            data_type,
-            data: input.1.clone(),
+            data_type: GL::UNSIGNED_BYTE,
+            data,
             level: 0,
         }
     }
