@@ -46,37 +46,38 @@ impl CmcClient {
         let window = web_sys::window().expect("no global `window` exists");
         let location = window.location();
         let document: Document = window.document().expect("should have a document on window");
-        let body = document.body().expect("No body!");
+        let panel = document.get_element_by_id("controlPanel").ok_or(CmcError::missing_val("controlPanel"))?;
 
         let models = assets::load_models(location.origin()?, &window).await?;
 
         let (label, slider) = create_slider(&document, "X", 0.0..360.0, 0.0, |x| state::update_shape_rotation(0, x))?;
-        body.append_child(&label)?;
-        body.append_child(&slider)?;
+        panel.append_child(&label)?;
+        panel.append_child(&slider)?;
 
         let (label, slider) = create_slider(&document, "Y", 0.0..360.0, 0.0, |x| state::update_shape_rotation(1, x))?;
-        body.append_child(&label)?;
-        body.append_child(&slider)?;
+        panel.append_child(&label)?;
+        panel.append_child(&slider)?;
 
         let (label, slider) = create_slider(&document, "Z", 0.0..360.0, 0.0, |x| state::update_shape_rotation(2, x))?;
-        body.append_child(&label)?;
-        body.append_child(&slider)?;
+        panel.append_child(&label)?;
+        panel.append_child(&slider)?;
 
         let (label, slider) = create_slider(&document, "Spot limit", 0.0..180.0, 90.0, |x| state::update_limit(x))?;
-        body.append_child(&label)?;
-        body.append_child(&slider)?;
+        panel.append_child(&label)?;
+        panel.append_child(&slider)?;
 
         let (label, slider) = create_slider(&document, "X", -10.0..10.0, 0.0, |x| state::update_light_location(0, x))?;
-        body.append_child(&label)?;
-        body.append_child(&slider)?;
+        panel.append_child(&label)?;
+        panel.append_child(&slider)?;
 
         let (label, slider) = create_slider(&document, "Y", -10.0..10.0, 2.0, |x| state::update_light_location(1, x))?;
-        body.append_child(&label)?;
-        body.append_child(&slider)?;
+        panel.append_child(&label)?;
+        panel.append_child(&slider)?;
 
         let (label, slider) = create_slider(&document, "Z", -10.0..10.0, 0.0, |x| state::update_light_location(2, x))?;
-        body.append_child(&label)?;
-        body.append_child(&slider)?;
+        panel.append_child(&label)?;
+        panel.append_child(&slider)?;
+
         let document = Rc::new(document);
         let canvas: Rc<HtmlCanvasElement> = Rc::new(setup_canvas(&document)?);
         let gl = setup_gl_context(&canvas, true)?;

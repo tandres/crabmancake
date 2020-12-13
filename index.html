@@ -3,9 +3,15 @@
         <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
         <title>CrabManCake</title>
         <link rel="icon" href="data:;base64,iVBORwOKGO=" />
+        <link rel="stylesheet" href="styles.css">
     </head>
     <body rel="icon" href="data:;base64,iVBORwOKGO=">
-        <canvas id="rustCanvas" width="1280" height="720"></canvas>
+        <div class="split left">
+            <div class="canvas">
+                <canvas id="rustCanvas" width="640" height="480"></canvas>
+            </div>
+        </div>
+        <div class="split right" id="controlPanel"/>
         <script src="index.js"></script>
     </body>
 </html>

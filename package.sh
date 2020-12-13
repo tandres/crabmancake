@@ -10,6 +10,7 @@ fi
 
 cp index.html ${WEBDIR}/index.html
 cp index.js ${WEBDIR}/index.js
+cp styles.css ${WEBDIR}/styles.css
 
 cp -r pkg ${WEBDIR}/pkg
 cp -r models ${WEBDIR}/models
