@@ -86,9 +86,19 @@ impl CmcClient {
             log::info!("{}", key);
         }
         let mut shapes = Vec::new();
-        let entity = Entity::new_at(Vector3::new(0.,0.,0.));
-        let cube_renderer = rendercache.get_shaperenderer("Suzanne_glb").expect("Failed to get renderer");
-        shapes.push(Shape::new(cube_renderer, entity));
+        let mut entity_locs = Vec::new();
+        for i in 0..4 {
+            for j in 0..4 {
+                for k in 0..4 {
+                    entity_locs.push([i as f32 * 4., j as f32 * 4., k as f32 * 4.]);
+                }
+            }
+        }
+        for loc in entity_locs.iter() {
+            let entity = Entity::new_at(Vector3::new(loc[0], loc[1], loc[2]));
+            let cube_renderer = rendercache.get_shaperenderer("Cube_glb").expect("Failed to get renderer");
+            shapes.push(Shape::new(cube_renderer, entity));
+        }
 
         let scene = Arc::new(RwLock::new(Scene::new([-3., 2., 3.], 640., 480.)));
         let lights = vec![

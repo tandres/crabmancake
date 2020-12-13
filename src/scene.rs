@@ -57,13 +57,26 @@ impl Scene {
 
     pub fn mouse_rotate(&mut self, rotations: [f32; 3]) {
         let sensi = 1. / 100.;
+        let min_angle = f32::from(10.).to_radians();
+        let max_angle = f32::from(170.).to_radians();
         let x_rot_angle = sensi * rotations[1];
         let y_rot_angle = sensi * rotations[0];
-        let uq_y = UnitQuaternion::from_axis_angle(&Unit::new_normalize(self.look_dir_up), y_rot_angle);
+        let up = Vector3::y();
+        let up_angle = self.look_dir.angle(&up);
+        let x_rot_angle = if up_angle > max_angle && x_rot_angle.is_sign_negative() {
+            0.
+        } else if up_angle < min_angle && x_rot_angle.is_sign_positive() {
+            0.
+        } else {
+            x_rot_angle
+        };
+        let uq_y = UnitQuaternion::from_axis_angle(&Unit::new_normalize(up), y_rot_angle);
         let uq_x = UnitQuaternion::from_axis_angle(&Unit::new_normalize(self.look_dir_left), x_rot_angle);
         self.look_dir = uq_y * uq_x * self.look_dir;
-        self.look_dir_left = uq_y * uq_x * self.look_dir_left;
-        self.look_dir_up = uq_y * uq_x * self.look_dir_up;
+        //min and max are swapped here on purpose remember
+        // self.look_dir.y = nalgebra::clamp(self.look_dir.y, max_angle.cos(), min_angle.cos());
+        self.look_dir_left = self.look_dir.cross(&up);
+        self.look_dir_up = self.look_dir.cross(&self.look_dir_left);
     }
 
     pub fn update_aspect(&mut self, width: f32, height: f32) {
