@@ -33,6 +33,8 @@ pub struct CmcClient {
     shapes: Vec<Shape>,
     lights: Vec<Light>,
     callbacks: HashMap<String, Rc<Closure<dyn FnMut(Event)>>>,
+    canvas_side: Element,
+    control_panel_side: Element,
     document: Rc<Document>,
     canvas: Rc<HtmlCanvasElement>,
     scene: Arc<RwLock<Scene>>,
@@ -46,6 +48,7 @@ impl CmcClient {
         let window = web_sys::window().expect("no global `window` exists");
         let location = window.location();
         let document: Document = window.document().expect("should have a document on window");
+        let canvas_side = document.get_element_by_id("canvasSide").ok_or(CmcError::missing_val("canvasSide"))?;
         let panel = document.get_element_by_id("controlPanel").ok_or(CmcError::missing_val("controlPanel"))?;
 
         let models = assets::load_models(location.origin()?, &window).await?;
@@ -113,6 +116,8 @@ impl CmcClient {
             shapes,
             lights,
             callbacks: HashMap::new(),
+            control_panel_side: panel,
+            canvas_side,
             document,
             canvas,
             scene,
@@ -125,10 +130,17 @@ impl CmcClient {
         Ok(client)
     }
 
-    pub fn update(&mut self, elapsed_time: f32, height: f32, width: f32) -> Result<(), JsValue> {
+    pub fn update(&mut self, elapsed_time: f32) -> Result<(), JsValue> {
+        let (new_width, new_height) = look_up_resolution(self.canvas_side.client_width(), self.canvas_side.client_height());
+        if new_width != self.canvas.width() || new_height != self.canvas.height() {
+            self.canvas.set_width(new_width);
+            self.canvas.set_height(new_height);
+            self.web_gl.viewport(0, 0, new_width as i32, new_height as i32);
+        }
+
         let state = state::get_curr();
         self.lights[0].set_location(state.light_location);
-        let delta_t = state::update(elapsed_time, height, width);
+        let delta_t = state::update(elapsed_time);
         let rotations = state::get_curr().rotations;
         let rotations = Vector3::new(
             rotations[0] as f32 * std::f32::consts::PI / 180.,
@@ -142,7 +154,7 @@ impl CmcClient {
         }
         {
             let mut scene = self.scene.write().unwrap();
-            scene.update_aspect(width, height);
+            scene.update_aspect(self.canvas.width() as f32, self.canvas.height() as f32);
             scene.update_from_key_state(&key_state);
         }
 
@@ -182,6 +194,23 @@ pub fn cmc_init() {
     console_log::init_with_level(log::Level::Trace).unwrap();
     console_error_panic_hook::set_once();
     trace!("Info:\n Git version: {}", GIT_VERSION);
+}
+
+fn look_up_resolution(avail_width: i32, avail_height: i32) -> (u32, u32) {
+    let resolutions = [
+        (320, 240),
+        (640, 480),
+        (1024, 768),
+    ];
+    let mut good_resolution = resolutions[0];
+    for resolution in resolutions.iter() {
+        if avail_width < resolution.0 as i32 || avail_height < resolution.1 as i32 {
+            break;
+        } else {
+            good_resolution = resolution.clone();
+        }
+    }
+    good_resolution
 }
 
 fn setup_canvas(document: &Rc<Document>) -> Result<HtmlCanvasElement, JsValue> {
@@ -325,6 +354,7 @@ where
     base.set_attribute("min", &range.start.to_string())?;
     base.set_attribute("max", &range.end.to_string())?;
     base.set_attribute("value", &start.to_string())?;
+    base.set_attribute("class", "inputSlider")?;
     let html_input: HtmlInputElement = base.dyn_into::<HtmlInputElement>()?;
     let handler = move |event: web_sys::Event| {
         if let Some(target) = event.target() {

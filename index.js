@@ -1,6 +1,4 @@
 const rust = import('./pkg/crabmancake.js');
-const canvas = document.getElementById('rustCanvas');
-const gl = canvas.getContext("webgl", { antialias: true});
 
 async function crab() {
     let mod = await rust;
@@ -19,7 +17,7 @@ async function crab() {
         if (currTime >= lastDrawTime + FPS_THROTTLE) {
             lastDrawTime = currTime;
             let elapsedTime = currTime - initialTime;
-            cmcClient.update(elapsedTime, canvas.height, canvas.width);
+            cmcClient.update(elapsedTime);
             cmcClient.render();
         }
     }
