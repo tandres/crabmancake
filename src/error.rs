@@ -22,6 +22,11 @@ pub enum CmcError {
         jsvalue: JsValue,
         description: String,
     },
+    #[error("Element Error: {description}")]
+    Element {
+        element: web_sys::Element,
+        description: String,
+    },
     #[error("Gltf error: {error}")]
     Gltf {
         #[from]
@@ -56,6 +61,15 @@ impl From<JsValue> for CmcError {
         CmcError::JsValue {
             jsvalue: val,
             description: String::from("You should have figured this out"),
+        }
+    }
+}
+
+impl From<web_sys::Element> for CmcError {
+    fn from(val: web_sys::Element) -> Self {
+        CmcError::Element {
+            element: val,
+            description: String::from("Another thing you should have figured out"),
         }
     }
 }

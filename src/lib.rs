@@ -1,9 +1,9 @@
-use crate::{scene::Scene, entity::Entity, shape::Shape, error::CmcError, render::RenderCache, light::{Attenuator, Light}};
+use crate::{control::ControlSelect, scene::Scene, entity::Entity, shape::Shape, error::CmcError, render::RenderCache, light::{Attenuator, Light}};
 use log::{trace, debug};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::*;
-use web_sys::{Document, Element, Event, EventTarget, HtmlCanvasElement, HtmlInputElement, WebGlRenderingContext as WebGL};
+use web_sys::{Document, Element, Event, EventTarget, HtmlCanvasElement, HtmlInputElement, HtmlOptionElement, HtmlSelectElement, WebGlRenderingContext as WebGL};
 use js_sys::Function;
 use nalgebra::Vector3;
 use std::collections::HashMap;
@@ -15,6 +15,7 @@ use key_state::KeyState;
 const GIT_VERSION: &str = git_version::git_version!();
 const RUST_CANVAS: &str = "rustCanvas";
 
+mod control;
 mod key_state;
 mod entity;
 mod error;
@@ -34,11 +35,12 @@ pub struct CmcClient {
     lights: Vec<Light>,
     callbacks: HashMap<String, Rc<Closure<dyn FnMut(Event)>>>,
     canvas_side: Element,
-    control_panel_side: Element,
+    control_panel_side: Rc<Element>,
     document: Rc<Document>,
     canvas: Rc<HtmlCanvasElement>,
     scene: Arc<RwLock<Scene>>,
     key_state: Arc<RwLock<KeyState>>,
+    object_select: ControlSelect,
 }
 
 #[wasm_bindgen]
@@ -52,36 +54,27 @@ impl CmcClient {
         let panel = document.get_element_by_id("controlPanel").ok_or(CmcError::missing_val("controlPanel"))?;
 
         let models = assets::load_models(location.origin()?, &window).await?;
+        create_select(&document, &panel, "Selector", &vec![("option1", "option1"), ("option2", "option2")])?;
+        create_button(&document, &panel, "Button")?;
+        create_slider(&document, &panel, "X", 0.0..360.0, 0.0, |x| state::update_shape_rotation(0, x))?;
 
-        let (label, slider) = create_slider(&document, "X", 0.0..360.0, 0.0, |x| state::update_shape_rotation(0, x))?;
-        panel.append_child(&label)?;
-        panel.append_child(&slider)?;
+        create_slider(&document, &panel, "Y", 0.0..360.0, 0.0, |x| state::update_shape_rotation(1, x))?;
 
-        let (label, slider) = create_slider(&document, "Y", 0.0..360.0, 0.0, |x| state::update_shape_rotation(1, x))?;
-        panel.append_child(&label)?;
-        panel.append_child(&slider)?;
+        create_slider(&document, &panel, "Z", 0.0..360.0, 0.0, |x| state::update_shape_rotation(2, x))?;
 
-        let (label, slider) = create_slider(&document, "Z", 0.0..360.0, 0.0, |x| state::update_shape_rotation(2, x))?;
-        panel.append_child(&label)?;
-        panel.append_child(&slider)?;
+        create_slider(&document, &panel, "Spot limit", 0.0..180.0, 90.0, |x| state::update_limit(x))?;
 
-        let (label, slider) = create_slider(&document, "Spot limit", 0.0..180.0, 90.0, |x| state::update_limit(x))?;
-        panel.append_child(&label)?;
-        panel.append_child(&slider)?;
+        create_slider(&document, &panel, "X", -10.0..10.0, 0.0, |x| state::update_light_location(0, x))?;
 
-        let (label, slider) = create_slider(&document, "X", -10.0..10.0, 0.0, |x| state::update_light_location(0, x))?;
-        panel.append_child(&label)?;
-        panel.append_child(&slider)?;
+        create_slider(&document, &panel, "Y", -10.0..10.0, 2.0, |x| state::update_light_location(1, x))?;
 
-        let (label, slider) = create_slider(&document, "Y", -10.0..10.0, 2.0, |x| state::update_light_location(1, x))?;
-        panel.append_child(&label)?;
-        panel.append_child(&slider)?;
-
-        let (label, slider) = create_slider(&document, "Z", -10.0..10.0, 0.0, |x| state::update_light_location(2, x))?;
-        panel.append_child(&label)?;
-        panel.append_child(&slider)?;
+        create_slider(&document, &panel, "Z", -10.0..10.0, 0.0, |x| state::update_light_location(2, x))?;
 
         let document = Rc::new(document);
+        let panel = Rc::new(panel);
+        let mut select = ControlSelect::new(&document, &panel, Some("Objects:"), "object_select")?;
+        select.add_option(0, "Object 1", "Object 1")?;
+        select.append_to_parent()?;
         let canvas: Rc<HtmlCanvasElement> = Rc::new(setup_canvas(&document)?);
         let gl = setup_gl_context(&canvas, true)?;
         let rendercache = render::build_rendercache(&gl, &models).expect("Failed to create rendercache");
@@ -121,6 +114,7 @@ impl CmcClient {
             document,
             canvas,
             scene,
+            object_select: select,
             key_state: Arc::new(RwLock::new(KeyState::new())),
         };
 
@@ -342,7 +336,47 @@ fn attach_mouse_onclick_handler(client: &mut CmcClient) -> Result<(), JsValue> {
     Ok(())
 }
 
-fn create_slider<F>(document: &Document, label: &str, range: std::ops::Range<f32>, start: f32, mut func: F) -> Result<(Element, HtmlInputElement), JsValue>
+fn create_button(document: &Document, element: &Element, name: &str) -> Result<(), JsValue> {
+    let base = document.create_element("input")?;
+    base.set_attribute("type", "button")?;
+    let html_input: HtmlInputElement = base.dyn_into::<HtmlInputElement>()?;
+    let handler = move |event: web_sys::Event| {
+        // if let Some(target) = event.target() {
+        //     if let Some(target_inner) = target.dyn_ref::<HtmlInputElement>() {
+
+        //     }
+        // }
+        log::info!("Button pressed!");
+    };
+    let handler = Closure::wrap(Box::new(handler) as Box<dyn FnMut(_)>);
+    html_input.add_event_listener_with_callback("click", &Function::from(handler.into_js_value()))?;
+    element.append_child(&html_input)?;
+    Ok(())
+}
+
+fn create_select(document: &Document, element: &Element, name: &str, options: &Vec<(&str, &str)>) -> Result<(), JsValue> {
+    let base = document.create_element("select")?;
+    base.set_attribute("name", name)?;
+    base.set_attribute("id", name)?;
+    let html_select: HtmlSelectElement = base.dyn_into::<HtmlSelectElement>()?;
+    let handler = move |event: web_sys::Event| {
+        if let Some(target) = event.target() {
+            if let Some(target_inner) = target.dyn_ref::<HtmlSelectElement>() {
+                log::info!("Select event: {:?}", target_inner.value());
+            }
+        }
+    };
+    for option in options {
+        let option_element = HtmlOptionElement::new_with_text_and_value(option.0, option.1)?;
+        html_select.append_child(&option_element)?;
+    }
+    let handler = Closure::wrap(Box::new(handler) as Box<dyn FnMut(_)>);
+    html_select.add_event_listener_with_callback("change", &Function::from(handler.into_js_value()))?;
+    element.append_child(&html_select)?;
+    Ok(())
+}
+
+fn create_slider<F>(document: &Document, element: &Element, label: &str, range: std::ops::Range<f32>, start: f32, mut func: F) -> Result<(), JsValue>
 where
     F: FnMut(f64) + 'static,
 {
@@ -354,6 +388,7 @@ where
     base.set_attribute("min", &range.start.to_string())?;
     base.set_attribute("max", &range.end.to_string())?;
     base.set_attribute("value", &start.to_string())?;
+    base.set_attribute("label", label)?;
     base.set_attribute("class", "inputSlider")?;
     let html_input: HtmlInputElement = base.dyn_into::<HtmlInputElement>()?;
     let handler = move |event: web_sys::Event| {
@@ -366,6 +401,8 @@ where
     };
     let handler = Closure::wrap(Box::new(handler) as Box<dyn FnMut(_)>);
     html_input.add_event_listener_with_callback("input", &Function::from(handler.into_js_value()))?;
-    Ok((html_label, html_input))
+    element.append_child(&html_label)?;
+    element.append_child(&html_input)?;
+    Ok(())
 }
 
