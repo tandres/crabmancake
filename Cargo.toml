@@ -36,6 +36,7 @@ features = [
   'EventTarget',
   'Headers',
   'HtmlElement',
+  'HtmlButtonElement',
   'HtmlCanvasElement',
   'HtmlInputElement',
   'HtmlSelectElement',
