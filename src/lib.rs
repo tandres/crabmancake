@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use key_state::KeyState;
 use network::{Network, Receiver, Sender};
-use control::{ControlButton, ControlSelect};
+use control::{ControlButton, ControlSelect, ControlMessage};
 
 const GIT_VERSION: &str = git_version::git_version!();
 const RUST_CANVAS: &str = "rustCanvas";
@@ -34,7 +34,7 @@ pub struct CmcClient {
     web_gl: WebGL,
     #[allow(dead_code)]
     rendercache: RenderCache,
-    shapes: Vec<Shape>,
+    shapes: HashMap<String, Shape>,
     lights: Vec<Light>,
     callbacks: HashMap<String, Rc<Closure<dyn FnMut(Event)>>>,
     canvas_side: Element,
@@ -44,9 +44,11 @@ pub struct CmcClient {
     scene: Arc<RwLock<Scene>>,
     key_state: Arc<RwLock<KeyState>>,
     object_select: ControlSelect,
-    object_button: ControlButton,
-    button_network: Rc<Network<(usize, bool)>>,
-    button_rxer: Rc<Receiver<(usize, bool)>>,
+    add_object_button: ControlButton,
+    remove_object_button: ControlButton,
+    control_network: Rc<Network<ControlMessage>>,
+    control_rxer: Rc<Receiver<ControlMessage>>,
+    obj_id: u32,
 }
 
 #[wasm_bindgen]
@@ -58,35 +60,28 @@ impl CmcClient {
         let document: Document = window.document().expect("should have a document on window");
         let canvas_side = document.get_element_by_id("canvasSide").ok_or(CmcError::missing_val("canvasSide"))?;
         let panel = document.get_element_by_id("controlPanel").ok_or(CmcError::missing_val("controlPanel"))?;
-        let button_network = Network::new();
+        let control_network = Network::new();
         let models = assets::load_models(location.origin()?, &window).await?;
         let document = Rc::new(document);
         let panel = Rc::new(panel);
-        let mut select = ControlSelect::new(&document, &panel, Some("Objects:"), "object_select")?;
-        select.add_option(0, "Object 1", "Object 1")?;
+
+        let select = ControlSelect::new("object_select", &document, &panel, Some("Objects:"), "object_select", control_network.new_sender())?;
         select.append_to_parent()?;
-        let button = ControlButton::new(&document, &panel, None, "Add Object", button_network.new_sender())?;
-        button.append_to_parent()?;
+
+
+        let add_button = ControlButton::new("add_object", &document, &panel, None, "Add Object", control_network.new_sender())?;
+        add_button.append_to_parent()?;
+
+
+        let remove_button = ControlButton::new("remove_object", &document, &panel, None, "Remove Object", control_network.new_sender())?;
+        remove_button.append_to_parent()?;
+
         let canvas: Rc<HtmlCanvasElement> = Rc::new(setup_canvas(&document)?);
         let gl = setup_gl_context(&canvas, true)?;
         let rendercache = render::build_rendercache(&gl, &models).expect("Failed to create rendercache");
         log::info!("Available shapes");
         for key in rendercache.shape_renderers.keys() {
             log::info!("{}", key);
-        }
-        let mut shapes = Vec::new();
-        let mut entity_locs = Vec::new();
-        for i in 0..4 {
-            for j in 0..4 {
-                for k in 0..4 {
-                    entity_locs.push([i as f32 * 4., j as f32 * 4., k as f32 * 4.]);
-                }
-            }
-        }
-        for loc in entity_locs.iter() {
-            let entity = Entity::new_at(Vector3::new(loc[0], loc[1], loc[2]));
-            let cube_renderer = rendercache.get_shaperenderer("Cube_glb").expect("Failed to get renderer");
-            shapes.push(Shape::new(cube_renderer, entity));
         }
 
         let scene = Arc::new(RwLock::new(Scene::new([-3., 2., 3.], 640., 480.)));
@@ -98,7 +93,7 @@ impl CmcClient {
         let mut client = CmcClient {
             web_gl: gl,
             rendercache,
-            shapes,
+            shapes: HashMap::new(),
             lights,
             callbacks: HashMap::new(),
             control_panel_side: panel,
@@ -107,10 +102,12 @@ impl CmcClient {
             canvas,
             scene,
             object_select: select,
-            object_button: button,
-            button_rxer: button_network.new_receiver(),
-            button_network,
+            add_object_button: add_button,
+            remove_object_button: remove_button,
+            control_rxer: control_network.new_receiver(),
+            control_network,
             key_state: Arc::new(RwLock::new(KeyState::new())),
+            obj_id: 0,
         };
 
         attach_mouse_onclick_handler(&mut client)?;
@@ -126,20 +123,34 @@ impl CmcClient {
             self.canvas.set_height(new_height);
             self.web_gl.viewport(0, 0, new_width as i32, new_height as i32);
         }
-        let messages = self.button_rxer.read();
+        let messages = self.control_rxer.read();
         for msg in messages {
-            log::info!("Received {} from {} on queue", msg.1, msg.0);
-            self.object_select.add_option(elapsed_time as u32, "object x", &format!("{}", elapsed_time))?;
+            log::info!("Received {:?} on queue", msg);
+            use control::ControlMessageData::*;
+            match (msg.id.as_str(), &msg.data) {
+                ("add_object", Button) => {
+                    let id = self.obj_id;
+                    let name = format!("Object {}", id);
+                    let value = format!("object_{}", id);
+                    self.add_object(id, &value, [(id * 2) as f32, (id * 2) as f32, 0.]);
+                    self.obj_id += 1;
+                    self.object_select.add_option(id, &name, &value)?;
+                },
+                ("remove_object", Button) => {
+                    let value = self.object_select.value();
+                    self.remove_object(&value);
+                    self.object_select.remove_option(&value)?;
+                },
+                ("object_select", Select(val)) => {
+                    log::info!("Object select changed to: {}", val);
+                },
+                (_, _) => log::warn!("Unknown message"),
+            }
         }
         let state = state::get_curr();
         self.lights[0].set_location(state.light_location);
         let delta_t = state::update(elapsed_time);
-        let rotations = state::get_curr().rotations;
-        let rotations = Vector3::new(
-            rotations[0] as f32 * std::f32::consts::PI / 180.,
-            rotations[1] as f32 * std::f32::consts::PI / 180.,
-            rotations[2] as f32 * std::f32::consts::PI / 180.,
-        );
+
         let key_state = self.key_state.read().unwrap().clone();
         {
             let mut key_state = self.key_state.write().unwrap();
@@ -151,9 +162,8 @@ impl CmcClient {
             scene.update_from_key_state(&key_state);
         }
 
-        for shape in self.shapes.iter_mut() {
+        for (_id, shape) in self.shapes.iter_mut() {
             crate::entity::update(&mut shape.entity, delta_t);
-            crate::entity::set_rotation(&mut shape.entity, rotations);
         }
         Ok(())
     }
@@ -164,7 +174,7 @@ impl CmcClient {
             self.scene.read().unwrap().clone()
         };
 
-        for shape in self.shapes.iter() {
+        for (_id, shape) in self.shapes.iter() {
             shape.render(&self.web_gl, &scene, &self.lights)
         }
     }
@@ -180,6 +190,16 @@ impl CmcClient {
         Ok(self.lookup_callback(event)
             .ok_or(CmcError::missing_val(format!("Couldn't retrieve {}", event)))?)
     }
+
+    fn add_object(&mut self, _id: u32, object_name: &str, loc: [f32; 3]) {
+        let entity = Entity::new_at(Vector3::new(loc[0], loc[1], loc[2]));
+        let renderer = self.rendercache.get_shaperenderer("Cube_glb").expect("Failed to get renderer");
+        self.shapes.insert(object_name.to_string(), Shape::new(renderer, entity));
+    }
+
+    fn remove_object(&mut self, object_name: &str) {
+        self.shapes.remove(object_name);
+    }
 }
 
 #[wasm_bindgen]
@@ -188,6 +208,7 @@ pub fn cmc_init() {
     console_error_panic_hook::set_once();
     trace!("Info:\n Git version: {}", GIT_VERSION);
 }
+
 
 fn look_up_resolution(avail_width: i32, avail_height: i32) -> (u32, u32) {
     let resolutions = [

@@ -7,6 +7,34 @@ use js_sys::Function;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
+#[derive(Clone, Debug, Default)]
+pub struct ControlMessage {
+    pub id: String,
+    pub data: ControlMessageData,
+}
+
+impl ControlMessage {
+    pub fn new_id<S: AsRef<str>>(id: S) -> Self {
+        ControlMessage {
+            id: id.as_ref().to_string(),
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum ControlMessageData {
+    NotSet,
+    Button,
+    Select(String),
+}
+
+impl Default for ControlMessageData {
+    fn default() -> Self {
+        Self::NotSet
+    }
+}
+
 struct ControlOption {
     id: u32,
     text: String,
@@ -15,6 +43,7 @@ struct ControlOption {
 }
 
 pub struct ControlSelect {
+    id: String,
     document: Rc<Document>,
     parent: Rc<Element>,
     div: HtmlElement,
@@ -25,11 +54,16 @@ pub struct ControlSelect {
 }
 
 impl ControlSelect {
-    pub fn new(document: &Rc<Document>, parent: &Rc<Element>, label: Option<&str>, name: &str) -> CmcResult<Self> {
+    pub fn new<S: AsRef<str>>(id: S, document: &Rc<Document>, parent: &Rc<Element>, label: Option<&str>, name: &str, sender: Sender<ControlMessage>) -> CmcResult<Self> {
+        let control_message = ControlMessage::new_id(&id);
         let callback: Box<dyn FnMut(Event)> = Box::new(move |event: Event| {
             if let Some(target) = event.target() {
                 if let Some(target_inner) = target.dyn_ref::<HtmlSelectElement>() {
-                    log::info!("Select event: {:?}", target_inner.value());
+                    let msg = ControlMessage {
+                        data: ControlMessageData::Select(target_inner.value()),
+                        ..control_message.clone()
+                    };
+                    sender.send(msg);
                 }
             }
         });
@@ -52,6 +86,7 @@ impl ControlSelect {
         };
         div.append_child(&select)?;
         Ok(Self {
+            id: id.as_ref().to_string(),
             document: document.clone(),
             parent: parent.clone(),
             div,
@@ -86,9 +121,14 @@ impl ControlSelect {
         Ok(())
     }
 
+    pub fn value(&self) -> String {
+        self.select.value()
+    }
+
 }
 
 pub struct ControlButton {
+    id: String,
     document: Rc<Document>,
     parent: Rc<Element>,
     div: HtmlElement,
@@ -99,10 +139,13 @@ pub struct ControlButton {
 }
 
 impl ControlButton {
-    pub fn new(document: &Rc<Document>, parent: &Rc<Element>, label: Option<&str>, button_text: &str, sender: Sender<(usize, bool)>) -> CmcResult<Self> {
+    pub fn new<S: AsRef<str>>(id: S, document: &Rc<Document>, parent: &Rc<Element>, label: Option<&str>, button_text: &str, sender: Sender<ControlMessage>) -> CmcResult<Self> {
+        let control_message = ControlMessage::new_id(&id);
         let callback: Box<dyn FnMut(Event)> = Box::new(move |event: Event| {
-            sender.send((1, true));
-            log::info!("button pressed!");
+            sender.send(ControlMessage {
+                data: ControlMessageData::Button,
+                ..control_message.clone()
+            });
         });
         let callback = Closure::wrap(callback);
         let button_text = button_text.to_string();
@@ -123,6 +166,7 @@ impl ControlButton {
         };
         div.append_child(&button)?;
         Ok(ControlButton {
+            id: id.as_ref().to_string(),
             document: document.clone(),
             parent: parent.clone(),
             div,
