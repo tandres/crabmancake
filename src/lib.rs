@@ -11,11 +11,13 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::RwLock;
 use key_state::KeyState;
+use network::{Network, Receiver, Sender};
 
 const GIT_VERSION: &str = git_version::git_version!();
 const RUST_CANVAS: &str = "rustCanvas";
 
 mod control;
+mod network;
 mod key_state;
 mod entity;
 mod error;
@@ -41,6 +43,8 @@ pub struct CmcClient {
     scene: Arc<RwLock<Scene>>,
     key_state: Arc<RwLock<KeyState>>,
     object_select: ControlSelect,
+    hello_network: Rc<Network<String>>,
+    hello_rxer: Rc<Receiver<String>>,
 }
 
 #[wasm_bindgen]
@@ -52,10 +56,11 @@ impl CmcClient {
         let document: Document = window.document().expect("should have a document on window");
         let canvas_side = document.get_element_by_id("canvasSide").ok_or(CmcError::missing_val("canvasSide"))?;
         let panel = document.get_element_by_id("controlPanel").ok_or(CmcError::missing_val("controlPanel"))?;
-
+        let hello_network = Network::new();
+        // let hello_network: Network<String> = Network::new();
         let models = assets::load_models(location.origin()?, &window).await?;
         create_select(&document, &panel, "Selector", &vec![("option1", "option1"), ("option2", "option2")])?;
-        create_button(&document, &panel, "Button")?;
+        create_button(&document, &panel, "Button", hello_network.new_sender())?;
         create_slider(&document, &panel, "X", 0.0..360.0, 0.0, |x| state::update_shape_rotation(0, x))?;
 
         create_slider(&document, &panel, "Y", 0.0..360.0, 0.0, |x| state::update_shape_rotation(1, x))?;
@@ -115,6 +120,8 @@ impl CmcClient {
             canvas,
             scene,
             object_select: select,
+            hello_rxer: hello_network.new_receiver(),
+            hello_network,
             key_state: Arc::new(RwLock::new(KeyState::new())),
         };
 
@@ -131,7 +138,10 @@ impl CmcClient {
             self.canvas.set_height(new_height);
             self.web_gl.viewport(0, 0, new_width as i32, new_height as i32);
         }
-
+        let messages = self.hello_rxer.read();
+        for msg in messages {
+            log::info!("Received {} on queue", msg);
+        }
         let state = state::get_curr();
         self.lights[0].set_location(state.light_location);
         let delta_t = state::update(elapsed_time);
@@ -336,7 +346,7 @@ fn attach_mouse_onclick_handler(client: &mut CmcClient) -> Result<(), JsValue> {
     Ok(())
 }
 
-fn create_button(document: &Document, element: &Element, name: &str) -> Result<(), JsValue> {
+fn create_button(document: &Document, element: &Element, name: &str, sender: Sender<String>) -> Result<(), JsValue> {
     let base = document.create_element("input")?;
     base.set_attribute("type", "button")?;
     let html_input: HtmlInputElement = base.dyn_into::<HtmlInputElement>()?;
@@ -346,6 +356,7 @@ fn create_button(document: &Document, element: &Element, name: &str) -> Result<(
 
         //     }
         // }
+        sender.send("Hello".to_string());
         log::info!("Button pressed!");
     };
     let handler = Closure::wrap(Box::new(handler) as Box<dyn FnMut(_)>);
