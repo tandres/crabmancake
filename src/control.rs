@@ -125,23 +125,26 @@ impl ControlSelect {
         self.select.value()
     }
 
+    pub fn set_style(&self, style: &str) -> CmcResult<()> {
+        Ok(self.div.set_attribute("style", style)?)
+    }
 }
 
 pub struct ControlButton {
-    id: String,
-    document: Rc<Document>,
+    _id: String,
+    _document: Rc<Document>,
     parent: Rc<Element>,
     div: HtmlElement,
-    button: HtmlButtonElement,
-    label: Option<HtmlLabelElement>,
-    button_text: String,
-    callback: Closure<dyn FnMut(Event)>,
+    _button: HtmlButtonElement,
+    _label: Option<HtmlLabelElement>,
+    _button_text: String,
+    _callback: Closure<dyn FnMut(Event)>,
 }
 
 impl ControlButton {
     pub fn new<S: AsRef<str>>(id: S, document: &Rc<Document>, parent: &Rc<Element>, label: Option<&str>, button_text: &str, sender: Sender<ControlMessage>) -> CmcResult<Self> {
         let control_message = ControlMessage::new_id(&id);
-        let callback: Box<dyn FnMut(Event)> = Box::new(move |event: Event| {
+        let callback: Box<dyn FnMut(Event)> = Box::new(move |_event: Event| {
             sender.send(ControlMessage {
                 data: ControlMessageData::Button,
                 ..control_message.clone()
@@ -166,15 +169,19 @@ impl ControlButton {
         };
         div.append_child(&button)?;
         Ok(ControlButton {
-            id: id.as_ref().to_string(),
-            document: document.clone(),
+            _id: id.as_ref().to_string(),
+            _document: document.clone(),
             parent: parent.clone(),
             div,
-            button,
-            label,
-            button_text,
-            callback,
+            _button: button,
+            _label: label,
+            _button_text: button_text,
+            _callback: callback,
         })
+    }
+
+    pub fn set_style(&self, style: &str) -> CmcResult<()> {
+        Ok(self.div.set_attribute("style", style)?)
     }
 
     pub fn append_to_parent(&self) -> CmcResult<()> {

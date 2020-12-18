@@ -1,18 +1,18 @@
-use crate::{scene::Scene, entity::Entity, shape::Shape, error::CmcError, render::RenderCache, light::{Attenuator, Light}};
+use crate::{scene::Scene, entity::Entity, shape::Shape, render::RenderCache, light::{Attenuator, Light}};
 use log::{trace, debug};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::*;
-use web_sys::{Document, Element, Event, EventTarget, HtmlCanvasElement, HtmlInputElement, HtmlOptionElement, HtmlSelectElement, WebGlRenderingContext as WebGL};
-use js_sys::Function;
+use web_sys::{Document, Element, Event, EventTarget, HtmlCanvasElement, WebGlRenderingContext as WebGL};
 use nalgebra::Vector3;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::RwLock;
 use key_state::KeyState;
-use network::{Network, Receiver, Sender};
+use network::{Network, Receiver};
 use control::{ControlButton, ControlSelect, ControlMessage};
+use error::{CmcError, CmcResult};
 
 const GIT_VERSION: &str = git_version::git_version!();
 const RUST_CANVAS: &str = "rustCanvas";
@@ -43,11 +43,7 @@ pub struct CmcClient {
     canvas: Rc<HtmlCanvasElement>,
     scene: Arc<RwLock<Scene>>,
     key_state: Arc<RwLock<KeyState>>,
-    object_select: ControlSelect,
-    add_object_button: ControlButton,
-    remove_object_button: ControlButton,
-    control_network: Rc<Network<ControlMessage>>,
-    control_rxer: Rc<Receiver<ControlMessage>>,
+    object_control_panel: ObjectControlPanel,
     obj_id: u32,
 }
 
@@ -60,21 +56,10 @@ impl CmcClient {
         let document: Document = window.document().expect("should have a document on window");
         let canvas_side = document.get_element_by_id("canvasSide").ok_or(CmcError::missing_val("canvasSide"))?;
         let panel = document.get_element_by_id("controlPanel").ok_or(CmcError::missing_val("controlPanel"))?;
-        let control_network = Network::new();
         let models = assets::load_models(location.origin()?, &window).await?;
         let document = Rc::new(document);
         let panel = Rc::new(panel);
 
-        let select = ControlSelect::new("object_select", &document, &panel, Some("Objects:"), "object_select", control_network.new_sender())?;
-        select.append_to_parent()?;
-
-
-        let add_button = ControlButton::new("add_object", &document, &panel, None, "Add Object", control_network.new_sender())?;
-        add_button.append_to_parent()?;
-
-
-        let remove_button = ControlButton::new("remove_object", &document, &panel, None, "Remove Object", control_network.new_sender())?;
-        remove_button.append_to_parent()?;
 
         let canvas: Rc<HtmlCanvasElement> = Rc::new(setup_canvas(&document)?);
         let gl = setup_gl_context(&canvas, true)?;
@@ -83,7 +68,7 @@ impl CmcClient {
         for key in rendercache.shape_renderers.keys() {
             log::info!("{}", key);
         }
-
+        let object_control_panel = ObjectControlPanel::new(&document, &panel)?;
         let scene = Arc::new(RwLock::new(Scene::new([-3., 2., 3.], 640., 480.)));
         let lights = vec![
             Light::new_spot([0.,1.,0.], [0.,0.,0.], [1.,1.,1.], 90., 100., 10.0, Attenuator::new_7m()),
@@ -101,12 +86,8 @@ impl CmcClient {
             document,
             canvas,
             scene,
-            object_select: select,
-            add_object_button: add_button,
-            remove_object_button: remove_button,
-            control_rxer: control_network.new_receiver(),
-            control_network,
             key_state: Arc::new(RwLock::new(KeyState::new())),
+            object_control_panel,
             obj_id: 0,
         };
 
@@ -123,7 +104,7 @@ impl CmcClient {
             self.canvas.set_height(new_height);
             self.web_gl.viewport(0, 0, new_width as i32, new_height as i32);
         }
-        let messages = self.control_rxer.read();
+        let messages = self.object_control_panel.read_events();
         for msg in messages {
             log::info!("Received {:?} on queue", msg);
             use control::ControlMessageData::*;
@@ -134,12 +115,12 @@ impl CmcClient {
                     let value = format!("object_{}", id);
                     self.add_object(id, &value, [(id * 2) as f32, (id * 2) as f32, 0.]);
                     self.obj_id += 1;
-                    self.object_select.add_option(id, &name, &value)?;
+                    self.object_control_panel.add_option(id, &name, &value)?;
                 },
                 ("remove_object", Button) => {
-                    let value = self.object_select.value();
+                    let value = self.object_control_panel.get_selected_value();
                     self.remove_object(&value);
-                    self.object_select.remove_option(&value)?;
+                    self.object_control_panel.remove_option(&value)?;
                 },
                 ("object_select", Select(val)) => {
                     log::info!("Object select changed to: {}", val);
@@ -199,6 +180,67 @@ impl CmcClient {
 
     fn remove_object(&mut self, object_name: &str) {
         self.shapes.remove(object_name);
+    }
+}
+
+pub struct ObjectControlPanel {
+    _control_panel_side: Rc<Element>,
+    _document: Rc<Document>,
+    object_selector: ControlSelect,
+    _add_object_button: ControlButton,
+    _remove_object_button: ControlButton,
+    control_rxer: Rc<Receiver<ControlMessage>>,
+    _control_network: Rc<Network<ControlMessage>>,
+}
+
+impl ObjectControlPanel {
+    pub fn new(document: &Rc<Document>, side: &Rc<Element>) -> CmcResult<Self> {
+        let control_network = Network::new();
+        let panel_style = "position: relative;";
+        let panel = document.create_element("div")?;
+        panel.set_attribute("style", panel_style)?;
+        let panel = Rc::new(panel);
+
+
+        let select = ControlSelect::new("object_select", document, &panel, Some("Objects:"), "object_select", control_network.new_sender())?;
+        select.set_style("position: absolute; left: 0%; width: 25%")?;
+        select.append_to_parent()?;
+
+
+        let add_button = ControlButton::new("add_object", document, &panel, None, "Add Object", control_network.new_sender())?;
+        add_button.set_style("position: absolute; left: 25%; width: 25%")?;
+        add_button.append_to_parent()?;
+
+
+        let remove_button = ControlButton::new("remove_object", document, &panel, None, "Remove Object", control_network.new_sender())?;
+        remove_button.set_style("position: absolute; left: 50%; width: 25%")?;
+        remove_button.append_to_parent()?;
+        side.append_child(&panel)?;
+        Ok(Self {
+            _document: document.clone(),
+            _control_panel_side: side.clone(),
+            object_selector: select,
+            _add_object_button: add_button,
+            _remove_object_button: remove_button,
+            control_rxer: control_network.new_receiver(),
+            _control_network: control_network,
+        })
+    }
+
+    pub fn read_events(&self) -> Vec<Rc<ControlMessage>> {
+        self.control_rxer.read()
+    }
+
+    pub fn add_option(&mut self, id: u32, name: &str, value: &str) -> CmcResult<()> {
+        self.object_selector.add_option(id, name, value)
+    }
+
+    pub fn remove_option(&mut self, value: &str) -> CmcResult<()> {
+        self.object_selector.remove_option(value)
+    }
+
+    pub fn get_selected_value(&self) -> String {
+        self.object_selector.value()
     }
 }
 
