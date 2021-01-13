@@ -45,6 +45,7 @@ impl Light {
         Light { location, color, direction, target, inner_limit, outer_limit, intensity, attenuator }
     }
 
+    #[allow(dead_code)]
     pub fn set_location(&mut self, location: [f32; 3]) {
         self.location = Vector3::from(location);
         self.direction = self.target - self.location;

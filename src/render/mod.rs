@@ -22,10 +22,6 @@ impl RenderCache {
             log::warn!("Renderer for {} replaced!", type_name.as_ref());
         }
     }
-
-    pub fn get_shaperenderer<S: AsRef<str>>(&self, type_name: S) -> Option<Rc<ShapeRenderer>> {
-        self.shape_renderers.get(&type_name.as_ref().to_string()).map(|x| x.clone())
-    }
 }
 
 pub fn build_rendercache(gl: &WebGlRenderingContext, models: &Vec<Model>) -> CmcResult<RenderCache> {

@@ -12,6 +12,7 @@ pub struct Shape {
 }
 
 impl Shape {
+    #[allow(dead_code)]
     pub fn new(renderer: Rc<ShapeRenderer>, entity: Entity) -> Self {
         Self { renderer, entity }
     }

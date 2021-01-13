@@ -21,11 +21,13 @@ impl Entity {
         Entity::new(Vector3::zeros(), Vector3::zeros(), Vector3::zeros(), Vector3::zeros())
     }
 
+    #[allow(dead_code)]
     pub fn new_at(loc: Vector3<f32>) -> Self {
         Entity::new(loc, Vector3::zeros(), Vector3::zeros(), Vector3::zeros())
     }
 }
 
+#[allow(dead_code)]
 pub fn set_rotation(entity: &mut Entity, new_rot: Vector3<f32>) {
     entity.rotation = new_rot;
 }

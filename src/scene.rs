@@ -1,5 +1,5 @@
 use crate::key_state::KeyState;
-use nalgebra::{Isometry3, Matrix3x1, Perspective3, Point3, Unit, UnitQuaternion, Vector3};
+use nalgebra::{Isometry3, Perspective3, Point3, Unit, UnitQuaternion, Vector3};
 
 pub const FIELD_OF_VIEW: f32 = 45. * std::f32::consts::PI / 180.; //in radians
 pub const Z_FAR: f32 = 1000.;
@@ -51,6 +51,7 @@ impl Scene {
         self.eye = new_position;
     }
 
+    #[allow(dead_code)]
     pub fn move_absolute(&mut self, position: [f32; 3]) {
         self.eye = Point3::from(position)
     }
