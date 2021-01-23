@@ -1,5 +1,6 @@
 use yew::prelude::*;
 use yew::events::ChangeData;
+use crate::uid::Uid;
 
 pub struct ObjectSelect {
     link: ComponentLink<Self>,
@@ -15,14 +16,14 @@ pub enum Msg {
 
 #[derive(Clone, PartialEq)]
 pub struct ObjectOption {
-    pub value: String,
+    pub value: Uid,
     pub display: String,
 }
 
 impl Default for ObjectOption {
     fn default() -> Self {
         ObjectOption {
-            value: "0".to_string(),
+            value: Uid::invalid(),
             display: "None".to_string(),
         }
     }
@@ -45,7 +46,7 @@ impl Component for ObjectSelect {
             link,
             label: properties.label,
             options: vec![ObjectOption::default()],
-            select_value: "0".to_string(),
+            select_value: String::from(Uid::invalid()),
             onsignal: properties.onsignal,
         }
     }
@@ -73,7 +74,7 @@ impl Component for ObjectSelect {
         if self.options.len() != props.options.len() + 1 {
             self.options = vec![ObjectOption::default()];
             self.options.append(&mut props.options);
-            self.select_value = props.select_value;
+            self.select_value = String::from(props.select_value);
             true
         } else {
             false

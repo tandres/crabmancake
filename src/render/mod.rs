@@ -15,12 +15,34 @@ pub struct RenderCache {
 }
 
 impl RenderCache {
-    #[allow(unused)]
-    pub fn add_shaperenderer<S: AsRef<str>>(&mut self, type_name: S, renderer: ShapeRenderer) {
-        let renderer = Rc::new(renderer);
-        if let Some(_) = self.shape_renderers.insert(type_name.as_ref().to_string(), renderer) {
-            log::warn!("Renderer for {} replaced!", type_name.as_ref());
+    pub fn add_model(&mut self, gl: &WebGlRenderingContext, model: &Model) -> CmcResult<usize> {
+        let (gltf, buffers, images) = (&model.gltf, &model.buffers, &model.images);
+        //log::trace!("Gltf loaded, {} buffers and {} images", buffers.len(), images.len());
+        let mut mesh_count = 0;
+        for mesh in gltf.meshes() {
+            for (obj_name, renderer) in build_renderer_glb(gl, &mesh, buffers, images)? {
+                log::info!("Adding renderer: {}", obj_name);
+                if let Some(old) = self.shape_renderers.insert(obj_name, Rc::new(renderer)) {
+                    log::warn!("Replaced renderer: {}", old.name);
+                }
+                mesh_count += 1;
+            }
         }
+        Ok(mesh_count)
+    }
+
+    pub fn new_with_models(gl: &WebGlRenderingContext, models: &Vec<Model>) -> CmcResult<RenderCache> {
+        build_rendercache(gl, models)
+    }
+
+    pub fn new_empty() -> CmcResult<RenderCache> {
+        Ok(RenderCache {
+            shape_renderers: HashMap::new(),
+        })
+    }
+
+    pub fn get_renderer<S: AsRef<str>>(&self, name: S) -> Option<Rc<ShapeRenderer>> {
+        self.shape_renderers.get(name.as_ref()).map(|i| i.clone())
     }
 }
 
@@ -31,6 +53,7 @@ pub fn build_rendercache(gl: &WebGlRenderingContext, models: &Vec<Model>) -> Cmc
         //log::trace!("Gltf loaded, {} buffers and {} images", buffers.len(), images.len());
         for mesh in gltf.meshes() {
             for (obj_name, renderer) in build_renderer_glb(gl, &mesh, buffers, images)? {
+                log::info!("Adding renderer: {}", obj_name);
                 if let Some(old) = shape_renderers.insert(obj_name, Rc::new(renderer)) {
                     log::warn!("Replaced renderer: {}", old.name);
                 }

@@ -7,7 +7,7 @@ pub const Z_NEAR: f32 = 1.0;
 
 const MAX_SPEED: f32 = 0.25;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Scene {
     eye: Point3<f32>,
     look_dir: Vector3<f32>,

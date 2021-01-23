@@ -2,24 +2,27 @@ use web_sys::Element;
 use yew::prelude::*;
 use rand::prelude::*;
 use object_select::{ObjectSelect, ObjectOption};
+use crate::bus::Sender;
+use crate::bus_manager::{BusManager, UiMsg};
+use std::rc::Rc;
+use crate::uid::{self, Uid};
 
 mod object_select;
 
 pub struct ControlPanelModel {
     link: ComponentLink<Self>,
-    value: String,
+    uimsg_sender: Sender<UiMsg>,
     object_list: Vec<ObjectOption>,
     object_selected: String,
 }
 
 #[derive(Properties, Clone)]
 pub struct ControlPanelProps {
-    pub suffix: String,
+    pub bus_manager: Rc<BusManager>,
 }
 
 pub enum Msg {
-    AddObject(String),
-    Hello,
+    AddObject(uid::Uid),
     Select(String),
 }
 
@@ -29,9 +32,9 @@ impl Component for ControlPanelModel {
     fn create(properties: Self::Properties, link: ComponentLink<Self>) -> Self {
         Self {
             link,
-            value: format!("{}_{}", properties.suffix, "Hello"),
+            uimsg_sender: properties.bus_manager.ui.new_sender(),
             object_list: Vec::new(),
-            object_selected: "0".to_string(),
+            object_selected: String::from(Uid::invalid()),
         }
     }
 
@@ -39,14 +42,11 @@ impl Component for ControlPanelModel {
         match msg {
             Msg::AddObject(value) => {
                 log::info!("Adding object: {}", value);
-                let display = format!("obj_{}", value);
-                let object_option = ObjectOption {value, display};
+                let display = format!("{}", value);
+                let object_option = ObjectOption {value: value.clone(), display};
                 self.object_list.push(object_option);
+                self.uimsg_sender.send(UiMsg::NewObject(value));
                 true
-            },
-            Msg::Hello => {
-                log::info!("Hello {}", self.value);
-                false
             },
             Msg::Select(s) => {
                 log::info!("Selected fired: {}", s);
@@ -67,24 +67,24 @@ impl Component for ControlPanelModel {
         html! {
             <div>
                 <ObjectSelect onsignal=self.link.callback(|s| Msg::Select(s)) select_value={&self.object_selected} options={&self.object_list}/>
-                <button onclick=self.link.callback(|_| Msg::AddObject(format!("{}", random::<u32>())))>{ "Add Object" }</button>
+                <button onclick=self.link.callback(|_| Msg::AddObject(uid::get_new_uid()))>{ "Add Object" }</button>
             </div>
         }
     }
 }
 
 impl ControlPanelModel {
-    pub fn mount(element: &Element, props: ControlPanelProps) {
-        App::<ControlPanelModel>::new().mount_with_props(element.clone(), props);
+    pub fn mount(element: &Element, props: ControlPanelProps) -> ComponentLink<Self> {
+        App::<ControlPanelModel>::new().mount_with_props(element.clone(), props)
     }
 
-    pub fn add_object(&self, object_id: u32) {
-        self.link.send_message(Msg::AddObject(format!("{}", object_id)));
-    }
+    // pub fn add_object(&self, object_id: u32) {
+    //     self.link.send_message(Msg::AddObject(format!("{}", object_id)));
+    // }
 
-    pub fn select_object(&self, object_value: String) {
-        if self.object_list.iter().find(|v| v.value == object_value).is_some() {
-            self.link.send_message(Msg::Select(object_value));
-        }
-    }
+    // pub fn select_object(&self, object_value: String) {
+    //     if self.object_list.iter().find(|v| v.value == object_value).is_some() {
+    //         self.link.send_message(Msg::Select(object_value));
+    //     }
+    // }
 }

@@ -1,29 +1,30 @@
 use std::rc::Rc;
 use std::sync::RwLock;
 
+pub type Bus<T> = Rc<BusInner<T>>;
+
 #[allow(dead_code)]
-pub struct Network<T> {
-    rxers: RwLock<Vec<Rc<Receiver<T>>>>,
+pub struct BusInner<T> {
+    rxers: RwLock<Vec<Receiver<T>>>,
 }
 
-impl<T> Network<T> {
-    #[allow(dead_code)]
-    pub fn new() -> Rc<Network<T>> {
-        Rc::new(Network {
-            rxers: RwLock::new(Vec::new()),
-        })
-    }
+pub fn create_bus<T>() -> Bus<T> {
+    Rc::new(BusInner {
+        rxers: RwLock::new(Vec::new()),
+    })
+}
 
+impl<T> BusInner<T> {
     #[allow(dead_code)]
-    pub fn new_sender(self: &Rc<Network<T>>) -> Sender<T> {
+    pub fn new_sender(self: &Rc<BusInner<T>>) -> Sender<T> {
         Sender {
-            network: self.clone()
+            bus: self.clone()
         }
     }
 
     #[allow(dead_code)]
-    pub fn new_receiver(self: &Rc<Network<T>>) -> Rc<Receiver<T>> {
-        let rx = Rc::new(Receiver {
+    pub fn new_receiver(self: &Rc<BusInner<T>>) -> Receiver<T> {
+        let rx = Rc::new(ReceiverInner {
             queue: RwLock::new(Vec::new()),
         });
         {
@@ -34,7 +35,7 @@ impl<T> Network<T> {
     }
 
     #[allow(dead_code)]
-    pub fn send(self: &Rc<Network<T>>, data: T) {
+    pub fn send(self: &Rc<BusInner<T>>, data: T) {
         let data = Rc::new(data);
         let rxers = {
             self.rxers.read().unwrap().clone()
@@ -48,7 +49,7 @@ impl<T> Network<T> {
 
 #[allow(dead_code)]
 pub struct Sender<T> {
-    network: Rc<Network<T>>,
+    bus: Bus<T>,
 }
 
 impl<T> Sender<T> {
@@ -57,16 +58,17 @@ impl<T> Sender<T> {
     // bubble update up from rxers to clear sender queus or something.
     #[allow(dead_code)]
     pub fn send(&self, data: T) {
-        self.network.send(data);
+        self.bus.send(data);
     }
 }
 
-pub struct Receiver<T>
-{
+pub type Receiver<T> = Rc<ReceiverInner<T>>;
+
+pub struct ReceiverInner<T> {
     queue: RwLock<Vec<Rc<T>>>,
 }
 
-impl<T> Receiver<T> {
+impl<T> ReceiverInner<T> {
     #[allow(dead_code)]
     pub fn read(&self) -> Vec<Rc<T>> {
         let mut queue = self.queue.write().unwrap();
