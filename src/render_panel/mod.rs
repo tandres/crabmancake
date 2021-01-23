@@ -12,6 +12,7 @@ use crate::light::{Attenuator, Light};
 use std::rc::Rc;
 use crate::assets::Model;
 use std::collections::HashMap;
+use yew::services::resize::{ResizeService, ResizeTask, WindowDimensions};
 
 pub struct RenderPanelModel {
     link: ComponentLink<Self>,
@@ -19,6 +20,7 @@ pub struct RenderPanelModel {
     canvas: Option<HtmlCanvasElement>,
     node_ref: NodeRef,
     render_loop: Option<Box<dyn Task>>,
+    resize_task: Option<Box<ResizeTask>>,
     panel: Element,
     rendermsg_receiver: Receiver<RenderMsg>,
     scene: Scene,
@@ -29,7 +31,9 @@ pub struct RenderPanelModel {
 
 pub enum Msg {
     Render(f64),
+    Resize(WindowDimensions),
 }
+
 
 #[derive(Clone, Properties, PartialEq)]
 pub struct RenderPanelProps {
@@ -50,6 +54,7 @@ impl Component for RenderPanelModel {
             link,
             node_ref: NodeRef::default(),
             render_loop: None,
+            resize_task: None,
             panel: props.panel,
             rendermsg_receiver: props.bus_manager.render.new_receiver(),
             rendercache,
@@ -64,12 +69,7 @@ impl Component for RenderPanelModel {
     }
 
     fn rendered(&mut self, first_render: bool) {
-        // Once rendered, store references for the canvas and GL context. These can be used for
-        // resizing the rendering area when the window or canvas element are resized, as well as
-        // for making GL calls.
         log::info!("Rendered");
-
-
         let canvas = self.node_ref.cast::<HtmlCanvasElement>().unwrap();
 
         let gl: WebGL = canvas
@@ -87,7 +87,11 @@ impl Component for RenderPanelModel {
         self.web_gl = Some(gl);
 
         if first_render {
+            self.resize();
+            let resize = self.link.callback(Msg::Resize);
+            let handle = ResizeService::new().register(resize);
 
+            self.resize_task = Some(Box::new(handle));
             // The callback to request animation frame is passed a time value which can be used for
             // rendering motion independent of the framerate which may vary.
             let render_frame = self.link.callback(Msg::Render);
@@ -128,7 +132,11 @@ impl Component for RenderPanelModel {
                     }
                 }
                 self.render_gl(timestamp);
-            }
+            },
+            Msg::Resize(_window_dimensions) => {
+                log::info!("Resized");
+                self.resize();
+            },
         }
         false
     }
@@ -181,16 +189,6 @@ impl RenderPanelModel {
     }
 
     fn render_gl(&mut self, _timestamp: f64) {
-        if let (Some(canvas), Some(gl)) = (self.canvas.as_ref(), self.web_gl.as_ref()) {
-            let (new_width, new_height) = look_up_resolution(self.panel.client_width(), self.panel.client_height());
-            if new_width != canvas.width() || new_height != canvas.height() {
-                canvas.set_width(new_width);
-                canvas.set_height(new_height);
-                gl.viewport(0, 0, new_width as i32, new_height as i32);
-            }
-        }
-
-        log::info!("Render_gl");
         let gl = self.web_gl.as_ref().expect("GL Context not initialized!");
         gl.clear(WebGL::COLOR_BUFFER_BIT | WebGL::DEPTH_BUFFER_BIT);
 
@@ -208,5 +206,16 @@ impl RenderPanelModel {
 
         // A reference to the new handle must be retained for the next render to run.
         self.render_loop = Some(Box::new(handle));
+    }
+
+    fn resize(&mut self) {
+        if let (Some(canvas), Some(gl)) = (self.canvas.as_ref(), self.web_gl.as_ref()) {
+            let (new_width, new_height) = look_up_resolution(self.panel.client_width(), self.panel.client_height());
+            if new_width != canvas.width() || new_height != canvas.height() {
+                canvas.set_width(new_width);
+                canvas.set_height(new_height);
+                gl.viewport(0, 0, new_width as i32, new_height as i32);
+            }
+        }
     }
 }
