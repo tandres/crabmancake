@@ -4,13 +4,12 @@ use web_sys::{Element, HtmlCanvasElement, WebGlRenderingContext as WebGL};
 use yew::services::{RenderService, Task};
 use yew::{html, Component, ComponentLink, Html, NodeRef, ShouldRender};
 use crate::shape::Shape;
-use crate::render::{RenderCache, ShapeRenderer};
+use crate::render::RenderCache;
 use crate::bus::Receiver;
 use crate::bus_manager::{BusManager, RenderMsg};
 use crate::scene::Scene;
 use crate::light::{Attenuator, Light};
 use std::rc::Rc;
-use crate::assets::Model;
 use std::collections::HashMap;
 use yew::services::resize::{ResizeService, ResizeTask, WindowDimensions};
 
@@ -32,6 +31,8 @@ pub struct RenderPanelModel {
 pub enum Msg {
     Render(f64),
     Resize(WindowDimensions),
+    MouseMove(MouseEvent),
+    MouseWheel(WheelEvent),
 }
 
 
@@ -123,6 +124,7 @@ impl Component for RenderPanelModel {
                             if let Some(renderer) = self.rendercache.get_renderer(renderer_name) {
                                 let entity = crate::entity::Entity::new_at(nalgebra::Vector3::new(2.,2.,2.));
                                 let object = crate::shape::Shape::new(renderer, entity);
+                                self.scene.look_at([2., 2., 2.]);
                                 self.shapes.insert(uid.into(), object);
                             } else {
                                 log::warn!("Couldn't find the requested renderer: {}", renderer_name);
@@ -137,19 +139,59 @@ impl Component for RenderPanelModel {
                 log::info!("Resized");
                 self.resize();
             },
+            Msg::MouseMove(m) => {
+                let (primary, aux, _) = mouse_buttons_pressed(m.buttons());
+                if primary {
+                    let rot_sensi = 0.01;
+                    let x = -m.movement_x() as f32;
+                    let y = -m.movement_y() as f32;
+                    self.scene.rotate_2d_about_target(x * rot_sensi, y * rot_sensi);
+                }
+                if aux {
+                    let strafe_sensi = 0.001;
+                    let x = -m.movement_x() as f32;
+                    let y = -m.movement_y() as f32;
+                    self.scene.strafe(x * strafe_sensi, y * strafe_sensi);
+                }
+            },
+            Msg::MouseWheel(m) => {
+                let wheel_sensitivity = 0.05;
+                let amount = if m.delta_y().is_sign_positive() {
+                    1. + wheel_sensitivity
+                } else {
+                    1. - wheel_sensitivity
+                };
+                self.scene.scale(amount)
+            }
         }
         false
     }
 
     fn view(&self) -> Html {
         html! {
-            <canvas ref={self.node_ref.clone()} />
+            <canvas
+                onmousemove=self.link.callback(Msg::MouseMove)
+                onwheel=self.link.callback(Msg::MouseWheel)
+                ref={self.node_ref.clone()} />
         }
     }
 
     fn change(&mut self, _props: Self::Properties) -> ShouldRender {
         false
     }
+}
+
+fn mouse_buttons_pressed(input: u16) -> (bool, bool, bool) {
+    // LMB most of the time
+    const PRIMARY_MOUSE_BUTTON_MASK: u16 = 0x1;
+    // Center
+    const AUX_MOUSE_BUTTON_MASK: u16 = 0x4;
+    // Right
+    const SECONDARY_MOUSE_BUTTON_MASK: u16 = 0x2;
+    (PRIMARY_MOUSE_BUTTON_MASK & input == PRIMARY_MOUSE_BUTTON_MASK,
+     AUX_MOUSE_BUTTON_MASK & input == AUX_MOUSE_BUTTON_MASK,
+     SECONDARY_MOUSE_BUTTON_MASK & input == SECONDARY_MOUSE_BUTTON_MASK)
+
 }
 
 fn setup_gl_context(context: &WebGL, print_context_info: bool) {

@@ -18,7 +18,6 @@ async function crab() {
             lastDrawTime = currTime;
             let elapsedTime = currTime - initialTime;
             cmcClient.update(elapsedTime);
-            cmcClient.render();
         }
     }
     render();
