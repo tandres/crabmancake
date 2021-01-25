@@ -18,14 +18,33 @@ impl Uid {
 
 impl fmt::Display for Uid {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "uid_{}", self.inner)
+        write!(f, "{}", self.inner)
     }
 }
 
+impl From<String> for Uid {
+   fn from(item: String) -> Uid {
+      let inner = item.parse::<u32>().unwrap();
+      Self {
+         inner
+      }
+   }
+}
+
+impl From<&String> for Uid {
+   fn from(item: &String) -> Uid {
+      log::info!("Item: {}", item);
+      let inner = item.parse::<u32>().unwrap();
+      Self {
+         inner
+      }
+   }
+}
+
 impl From<Uid> for String {
-    fn from(item: Uid) -> String {
-        format!("{}", item.inner)
-    }
+   fn from(item: Uid) -> String {
+     format!("{}", item.inner)
+   }
 }
 
 impl From<&Uid> for String {

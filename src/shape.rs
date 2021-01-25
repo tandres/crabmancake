@@ -12,7 +12,6 @@ pub struct Shape {
 }
 
 impl Shape {
-    #[allow(dead_code)]
     pub fn new(renderer: Rc<ShapeRenderer>, entity: Entity) -> Self {
         Self { renderer, entity }
     }
@@ -20,6 +19,4 @@ impl Shape {
     pub fn render(&self, gl: &WebGlRenderingContext, scene: &Scene, lights: &Vec<Light>) {
         self.renderer.render(gl, scene, lights, &self.entity.location, &self.entity.rotation)
     }
-
-
 }

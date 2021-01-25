@@ -1,4 +1,4 @@
-use crate::{scene::Scene, shape::Shape, assets::Model, light::{Attenuator, Light}};
+use crate::assets::Model;
 use crate::bus::{Bus, create_bus};
 use std::rc::Rc;
 use crate::uid::Uid;
@@ -6,10 +6,12 @@ use crate::uid::Uid;
 pub enum RenderMsg {
     NewModel(Rc<Model>),
     NewObject(Uid, String),
+    SetTarget(Uid),
 }
 
 pub enum UiMsg {
     NewObject(Uid),
+    SetTarget(Uid),
 }
 
 pub struct BusManager {

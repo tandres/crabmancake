@@ -74,6 +74,9 @@ impl CmcClient {
                 UiMsg::NewObject(uid) => {
                     self.render_sender.send(RenderMsg::NewObject(uid.clone(), "Cube_glb".to_string()));
                 },
+                UiMsg::SetTarget(uid) => {
+                    self.render_sender.send(RenderMsg::SetTarget(uid.clone()))
+                },
             }
         }
         Ok(())

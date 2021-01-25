@@ -1,4 +1,4 @@
-use crate::key_state::KeyState;
+use crate::shape::Shape;
 use nalgebra::{Isometry3, Perspective3, Matrix4, Point3, Unit, UnitQuaternion, Vector3};
 
 pub const FIELD_OF_VIEW: f32 = 45. * std::f32::consts::PI / 180.; //in radians
@@ -36,6 +36,11 @@ impl Scene {
         let target = Point3::from(target);
         self.target = target;
         self.target_refresh();
+    }
+
+    pub fn look_at_shape(&mut self, target: &Shape) {
+        let target = target.entity.location.xyz();
+        self.look_at([target[0], target[1], target[2]]);
     }
 
     fn target_refresh(&mut self) {

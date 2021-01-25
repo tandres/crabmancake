@@ -131,6 +131,12 @@ impl Component for RenderPanelModel {
                             }
 
                         },
+                        RenderMsg::SetTarget(uid) => {
+                            log::info!("Set target");
+                            if let Some(ref shape) = self.shapes.get(&String::from(uid)) {
+                                self.scene.look_at_shape(shape);
+                            }
+                        }
                     }
                 }
                 self.render_gl(timestamp);
@@ -148,7 +154,7 @@ impl Component for RenderPanelModel {
                     self.scene.rotate_2d_about_target(x * rot_sensi, y * rot_sensi);
                 }
                 if aux {
-                    let strafe_sensi = 0.001;
+                    let strafe_sensi = 0.005;
                     let x = -m.movement_x() as f32;
                     let y = -m.movement_y() as f32;
                     self.scene.strafe(x * strafe_sensi, y * strafe_sensi);
