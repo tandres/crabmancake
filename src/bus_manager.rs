@@ -5,12 +5,12 @@ use crate::uid::Uid;
 
 pub enum RenderMsg {
     NewModel(Rc<Model>),
-    NewObject(Uid, String),
+    NewObject(Uid, String, [f32; 3]),
     SetTarget(Uid),
 }
 
 pub enum UiMsg {
-    NewObject(Uid),
+    NewObject(Uid, [f32; 3]),
     SetTarget(Uid),
 }
 

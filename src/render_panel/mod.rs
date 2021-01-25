@@ -3,6 +3,7 @@ use yew::prelude::*;
 use web_sys::{Element, HtmlCanvasElement, WebGlRenderingContext as WebGL};
 use yew::services::{RenderService, Task};
 use yew::{html, Component, ComponentLink, Html, NodeRef, ShouldRender};
+use nalgebra::Vector3;
 use crate::shape::Shape;
 use crate::render::RenderCache;
 use crate::bus::Receiver;
@@ -119,10 +120,11 @@ impl Component for RenderPanelModel {
                                 }
                             }
                         },
-                        RenderMsg::NewObject(uid, renderer_name) => {
+                        RenderMsg::NewObject(uid, renderer_name, position) => {
                             log::info!("Recieved new object");
                             if let Some(renderer) = self.rendercache.get_renderer(renderer_name) {
-                                let entity = crate::entity::Entity::new_at(nalgebra::Vector3::new(2.,2.,2.));
+                                let position = Vector3::new(position[0], position[1], position[2]);
+                                let entity = crate::entity::Entity::new_at(position);
                                 let object = crate::shape::Shape::new(renderer, entity);
                                 self.scene.look_at([2., 2., 2.]);
                                 self.shapes.insert(uid.into(), object);
@@ -132,7 +134,6 @@ impl Component for RenderPanelModel {
 
                         },
                         RenderMsg::SetTarget(uid) => {
-                            log::info!("Set target");
                             if let Some(ref shape) = self.shapes.get(&String::from(uid)) {
                                 self.scene.look_at_shape(shape);
                             }

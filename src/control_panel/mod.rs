@@ -1,12 +1,14 @@
 use web_sys::Element;
 use yew::prelude::*;
 use object_select::{ObjectSelect, ObjectOption};
+use object_add::ObjectAdd;
 use crate::bus::Sender;
 use crate::bus_manager::{BusManager, UiMsg};
 use std::rc::Rc;
 use crate::uid::{self, Uid};
 
 mod object_select;
+mod object_add;
 
 pub struct ControlPanelModel {
     link: ComponentLink<Self>,
@@ -21,7 +23,7 @@ pub struct ControlPanelProps {
 }
 
 pub enum Msg {
-    AddObject(uid::Uid),
+    AddObject(uid::Uid, [f32; 3]),
     Select(String),
     SetTarget,
 }
@@ -40,12 +42,12 @@ impl Component for ControlPanelModel {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::AddObject(value) => {
-                log::info!("Adding object: {}", value);
-                let display = format!("uid_{}", value);
-                let object_option = ObjectOption {value: value.clone(), display};
+            Msg::AddObject(uid, position) => {
+                log::info!("Adding object: {}", uid);
+                let display = format!("uid_{}", uid);
+                let object_option = ObjectOption {value: uid.clone(), display};
                 self.object_list.push(object_option);
-                self.uimsg_sender.send(UiMsg::NewObject(value));
+                self.uimsg_sender.send(UiMsg::NewObject(uid, position));
                 true
             },
             Msg::Select(s) => {
@@ -72,7 +74,7 @@ impl Component for ControlPanelModel {
             <div>
                 <ObjectSelect onsignal=self.link.callback(|s| Msg::Select(s)) select_value={&self.object_selected} options={&self.object_list}/>
                 <button onclick=self.link.callback(|_| Msg::SetTarget)>{"Set Target"}</button>
-                <button onclick=self.link.callback(|_| Msg::AddObject(uid::get_new_uid()))>{ "Add Object" }</button>
+                <ObjectAdd onsignal=self.link.callback(|(uid, pos)| Msg::AddObject(uid, pos))/>
             </div>
         }
     }

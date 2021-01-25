@@ -14,6 +14,10 @@ impl Uid {
     pub fn invalid() -> Uid {
         Uid { inner: 0 }
     }
+
+    pub fn new() -> Uid {
+       get_new_uid()
+    }
 }
 
 impl fmt::Display for Uid {
@@ -33,7 +37,6 @@ impl From<String> for Uid {
 
 impl From<&String> for Uid {
    fn from(item: &String) -> Uid {
-      log::info!("Item: {}", item);
       let inner = item.parse::<u32>().unwrap();
       Self {
          inner

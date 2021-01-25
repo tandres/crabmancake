@@ -1,3 +1,4 @@
+#![recursion_limit="256"]
 use crate::scene::Scene;
 use crate::bus::{Sender, Receiver};
 use crate::bus_manager::*;
@@ -71,8 +72,8 @@ impl CmcClient {
         let ui_events = self.ui_receiver.read();
         for event in ui_events {
             match event.as_ref() {
-                UiMsg::NewObject(uid) => {
-                    self.render_sender.send(RenderMsg::NewObject(uid.clone(), "Cube_glb".to_string()));
+                UiMsg::NewObject(uid, position) => {
+                    self.render_sender.send(RenderMsg::NewObject(uid.clone(), "Cube_glb".to_string(), *position));
                 },
                 UiMsg::SetTarget(uid) => {
                     self.render_sender.send(RenderMsg::SetTarget(uid.clone()))
