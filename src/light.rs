@@ -1,4 +1,4 @@
-use nalgebra::Vector3;
+use nphysics3d::nalgebra::Vector3;
 
 pub struct Attenuator {
     val: [f32; 3],

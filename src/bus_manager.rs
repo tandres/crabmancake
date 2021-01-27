@@ -2,11 +2,13 @@ use crate::assets::Model;
 use crate::bus::{Bus, create_bus};
 use std::rc::Rc;
 use crate::uid::Uid;
+use nphysics3d::nalgebra::Isometry3;
 
 pub enum RenderMsg {
     NewModel(Rc<Model>),
     NewObject(Uid, String, [f32; 3]),
     SetTarget(Uid),
+    ObjectUpdate(Uid, Isometry3<f32>),
 }
 
 pub enum UiMsg {

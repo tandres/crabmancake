@@ -1,11 +1,9 @@
 use crate::shape::Shape;
-use nalgebra::{Isometry3, Perspective3, Matrix4, Point3, Unit, UnitQuaternion, Vector3};
+use nphysics3d::nalgebra::{Isometry3, Perspective3, Matrix4, Point3, Unit, UnitQuaternion, Vector3};
 
 pub const FIELD_OF_VIEW: f32 = 45. * std::f32::consts::PI / 180.; //in radians
 pub const Z_FAR: f32 = 1000.;
 pub const Z_NEAR: f32 = 1.0;
-
-const MAX_SPEED: f32 = 0.25;
 
 #[derive(Clone, PartialEq)]
 pub struct Scene {
@@ -39,7 +37,7 @@ impl Scene {
     }
 
     pub fn look_at_shape(&mut self, target: &Shape) {
-        let target = target.entity.location.xyz();
+        let target = target.position.translation.vector.xyz();
         self.look_at([target[0], target[1], target[2]]);
     }
 
@@ -122,6 +120,7 @@ impl Scene {
         self.look_dir_up = self.look_dir.cross(&self.look_dir_left);
     }
 
+    #[allow(unused)]
     pub fn update_aspect(&mut self, width: f32, height: f32) {
         self.width = width;
         self.height = height;

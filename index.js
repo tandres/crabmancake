@@ -16,8 +16,7 @@ async function crab() {
 
         if (currTime >= lastDrawTime + FPS_THROTTLE) {
             lastDrawTime = currTime;
-            let elapsedTime = currTime - initialTime;
-            cmcClient.update(elapsedTime);
+            cmcClient.update();
         }
     }
     render();

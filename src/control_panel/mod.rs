@@ -31,6 +31,7 @@ pub enum Msg {
 impl Component for ControlPanelModel {
     type Message = Msg;
     type Properties = ControlPanelProps;
+
     fn create(properties: Self::Properties, link: ComponentLink<Self>) -> Self {
         Self {
             link,

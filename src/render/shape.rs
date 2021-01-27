@@ -1,7 +1,7 @@
 use crate::{scene::Scene, error::{CmcError, CmcResult}, light::Light};
 use super::{common::build_program, gob::{Gob, GobDataAttribute}};
 use js_sys::WebAssembly;
-use nalgebra::{Isometry3, Vector3, Matrix4};
+use nphysics3d::nalgebra::{Isometry3, Vector3, Matrix4};
 use std::collections::HashMap;
 use wasm_bindgen::JsCast;
 use web_sys::WebGlRenderingContext as WebGL;
@@ -261,8 +261,9 @@ impl ShapeRenderer {
         gl: &WebGlRenderingContext,
         scene: &Scene,
         lights: &Vec<Light>,
-        location: &Vector3<f32>,
-        rotation: &Vector3<f32>,
+        position: &Isometry3<f32>,
+        // location: &Vector3<f32>,
+        // rotation: &Vector3<f32>,
     ) {
         gl.use_program(Some(&self.program));
         for (_key, gob_acc) in self.gob.accessors.iter().filter(|v| *v.0 != GobDataAttribute::Indices) {
@@ -278,7 +279,8 @@ impl ShapeRenderer {
             gl.uniform1i(Some(utexture), index as i32);
         }
 
-        let model_mat = Isometry3::new(location.clone(), rotation.clone()).to_homogeneous();
+        let model_mat = position.to_homogeneous();
+        // let model_mat = Isometry3::new(location.clone(), rotation.clone()).to_homogeneous();
         self.scene.populate_with(gl, scene, &model_mat);
 
         for (index, light) in lights.iter().enumerate() {
