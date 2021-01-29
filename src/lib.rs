@@ -1,6 +1,6 @@
 #![recursion_limit="256"]
 use crate::scene::Scene;
-use crate::bus::{Sender, Receiver};
+use crate::{assets::AssetLoadProps, bus::{Sender, Receiver}};
 use crate::bus_manager::*;
 use log::trace;
 use wasm_bindgen::JsValue;
@@ -10,7 +10,7 @@ use std::rc::Rc;
 use error::CmcError;
 use std::collections::HashMap;
 use crate::uid::Uid;
-use nphysics3d::nalgebra::{Point3, RealField, Vector3};
+use nphysics3d::nalgebra::Vector3;
 use nphysics3d::ncollide3d::shape::{Cuboid, ShapeHandle};
 use nphysics3d::force_generator::DefaultForceGeneratorSet;
 use nphysics3d::joint::DefaultJointConstraintSet;
@@ -56,6 +56,8 @@ impl CmcClient {
         let window = web_sys::window().expect("no global `window` exists");
         let location = window.location();
         let document: Document = window.document().expect("should have a document on window");
+        let loading_assets = document.get_element_by_id("loadingassets").ok_or(CmcError::missing_val("loading"))?;
+
         let bus_manager = Rc::new(BusManager::new(0));
         let canvas_side = document.get_element_by_id("canvasSide").ok_or(CmcError::missing_val("canvasSide"))?;
 
@@ -90,10 +92,9 @@ impl CmcClient {
         control_panel::ControlPanelModel::mount(&panel, control_panel::ControlPanelProps { bus_manager: bus_manager.clone()});
         let render_sender = bus_manager.render.new_sender();
 
-        let models = assets::load_models(location.origin()?, &window).await?;
-        for model in models {
-            render_sender.send(RenderMsg::NewModel(model));
-        }
+        // let models = assets::load_models(location.origin()?, &window).await?;
+        assets::AssetLoadModel::mount_with_props(&loading_assets, AssetLoadProps{ bus_manager: bus_manager.clone(), server_root: location.origin()? });
+
         let client = CmcClient {
             last_time: js_sys::Date::now(),
             ui_receiver: bus_manager.ui.new_receiver(),

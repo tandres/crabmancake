@@ -16,6 +16,7 @@ pub enum UiMsg {
     SetTarget(Uid),
 }
 
+#[derive(Clone)]
 pub struct BusManager {
     id: u32,
     pub render: Bus<RenderMsg>,

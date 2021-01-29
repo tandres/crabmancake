@@ -63,9 +63,9 @@ impl Component for RenderPanelModel {
             scene: props.scene,
             shapes: HashMap::new(),
             lights: vec![
-            Light::new_spot([0.,1.,0.], [0.,0.,0.], [1.,1.,1.], 90., 100., 10.0, Attenuator::new_7m()),
-            Light::new_point([5.,0.,0.], [1., 1., 1.], 5.0, Attenuator::new_7m()),
-            Light::new_point([-5.,0.,0.], [1.,1.,1.], 5.0, Attenuator::new_7m()),
+            // Light::new_spot([0.,1.,0.], [0.,0.,0.], [1.,1.,1.], 90., 100., 10.0, Attenuator::new_7m()),
+            // Light::new_point([5.,0.,0.], [1., 1., 1.], 5.0, Attenuator::new_7m()),
+            // Light::new_point([-5.,0.,0.], [1.,1.,1.], 5.0, Attenuator::new_7m()),
             ],
         }
     }

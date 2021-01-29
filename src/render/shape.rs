@@ -1,7 +1,7 @@
 use crate::{scene::Scene, error::{CmcError, CmcResult}, light::Light};
 use super::{common::build_program, gob::{Gob, GobDataAttribute}};
 use js_sys::WebAssembly;
-use nphysics3d::nalgebra::{Isometry3, Vector3, Matrix4};
+use nphysics3d::nalgebra::{Isometry3, Matrix4};
 use std::collections::HashMap;
 use wasm_bindgen::JsCast;
 use web_sys::WebGlRenderingContext as WebGL;
@@ -177,7 +177,7 @@ impl RenderScene {
         gl.uniform_matrix4fv_with_f32_array(Some(&self.u_projection), false, external_scene.get_projection_as_vec().as_slice());
         gl.uniform3fv_with_f32_array(Some(&self.u_eye), external_scene.get_eye_as_vec().as_slice());
 
-        let ambient_light = vec![0.1, 0.1, 0.1];
+        let ambient_light = vec![0.5, 0.5, 0.5];
         gl.uniform3fv_with_f32_array(Some(&self.u_ambient_light), ambient_light.as_slice());
     }
 }
