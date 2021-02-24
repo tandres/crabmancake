@@ -1,6 +1,29 @@
 use thiserror::Error;
 use wasm_bindgen::JsValue;
 
+// pub struct ErrorDescription {
+//     file: String,
+//     line: String,
+//     error: crate::error::CmcError,
+//     msg: String,
+// }
+
+// macro_rules! report_error {
+//     ( $sender:expr, $e:expr, $msg:expr  ) => {
+//         let error_msg = crate::bus_manager::ErrorMsg {
+//             file: file!(),
+//             line: line!(),
+//             error: $e,
+//             msg: $msg
+//         };
+
+//         $sender.send(error_msg);
+//     };
+// }
+
+// pub fn error_reporter(error_rx: Receiver<ErrorMsg>) -> Future<()> {
+// }
+
 pub type CmcResult<T> = Result<T, CmcError>;
 
 #[derive(Error, Debug)]
@@ -36,6 +59,11 @@ pub enum CmcError {
     Image {
         #[from]
         error: image::ImageError,
+    },
+    #[error("Reqwest error: {error}")]
+    Reqwest {
+        #[from]
+        error: reqwest::Error,
     },
 }
 

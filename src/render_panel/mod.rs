@@ -27,6 +27,7 @@ pub struct RenderPanelModel {
     lights: Vec<Light>,
     rendercache: RenderCache,
     shapes: HashMap<String, Shape>,
+    have_ground: bool,
 }
 
 pub enum Msg {
@@ -67,6 +68,7 @@ impl Component for RenderPanelModel {
             // Light::new_point([5.,0.,0.], [1., 1., 1.], 5.0, Attenuator::new_7m()),
             // Light::new_point([-5.,0.,0.], [1.,1.,1.], 5.0, Attenuator::new_7m()),
             ],
+            have_ground: false,
         }
     }
 
@@ -115,8 +117,18 @@ impl Component for RenderPanelModel {
                             log::info!("Received new model");
                             if let Some(ref web_gl) = self.web_gl {
                                 let result = self.rendercache.add_model(web_gl, model.as_ref());
-                                if result.is_err() {
-                                    log::warn!("Failed to add model to render cache!");
+                                if let Err(err) = result {
+                                    log::warn!("Failed to add model to render cache!: {}", err);
+                                } else if !self.have_ground {
+                                    if let Some(renderer) = self.rendercache.get_renderer("Ground_glb") {
+                                        log::warn!("Adding ground object");
+                                        let position = Isometry3::translation(0., 0., 0.);
+                                        let object = crate::shape::Shape::new(renderer, position);
+                                        self.shapes.insert(String::from(crate::uid::Uid::new()), object);
+                                        self.have_ground = true;
+                                    } else {
+                                        log::warn!("Couldn't find ground!");
+                                    }
                                 }
                             }
                         },
@@ -125,7 +137,6 @@ impl Component for RenderPanelModel {
                             if let Some(renderer) = self.rendercache.get_renderer(renderer_name) {
                                 let position = Isometry3::translation(position[0], position[1], position[2]);
                                 let object = crate::shape::Shape::new(renderer, position);
-                                self.scene.look_at([2., 2., 2.]);
                                 self.shapes.insert(uid.into(), object);
                             } else {
                                 log::warn!("Couldn't find the requested renderer: {}", renderer_name);

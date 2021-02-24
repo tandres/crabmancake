@@ -262,8 +262,6 @@ impl ShapeRenderer {
         scene: &Scene,
         lights: &Vec<Light>,
         position: &Isometry3<f32>,
-        // location: &Vector3<f32>,
-        // rotation: &Vector3<f32>,
     ) {
         gl.use_program(Some(&self.program));
         for (_key, gob_acc) in self.gob.accessors.iter().filter(|v| *v.0 != GobDataAttribute::Indices) {
@@ -280,7 +278,6 @@ impl ShapeRenderer {
         }
 
         let model_mat = position.to_homogeneous();
-        // let model_mat = Isometry3::new(location.clone(), rotation.clone()).to_homogeneous();
         self.scene.populate_with(gl, scene, &model_mat);
 
         for (index, light) in lights.iter().enumerate() {

@@ -1,0 +1,6 @@
+{
+    "name": "test_2",
+    "asset_type": { "glb_model" : {
+        "gl_root": "test_2.glb"
+    }}
+}

@@ -19,6 +19,7 @@ use nphysics3d::object::{
 };
 use nphysics3d::world::{DefaultGeometricalWorld, DefaultMechanicalWorld};
 use generational_arena::Index;
+use wasm_bindgen_futures::spawn_local;
 
 const GIT_VERSION: &str = git_version::git_version!();
 
@@ -54,11 +55,11 @@ impl CmcClient {
     #[wasm_bindgen(constructor)]
     pub async fn new() -> Result<CmcClient, JsValue> {
         let window = web_sys::window().expect("no global `window` exists");
-        let location = window.location();
         let document: Document = window.document().expect("should have a document on window");
         let loading_assets = document.get_element_by_id("loadingassets").ok_or(CmcError::missing_val("loading"))?;
 
         let bus_manager = Rc::new(BusManager::new(0));
+        let fut = spawn_local(assets::start_asset_fetch(bus_manager.clone()));
         let canvas_side = document.get_element_by_id("canvasSide").ok_or(CmcError::missing_val("canvasSide"))?;
 
         let mechanical_world = DefaultMechanicalWorld::new(Vector3::new(0.0, -9.81, 0.0));
@@ -75,6 +76,7 @@ impl CmcClient {
             ground_thickness,
             ground_width,
         )));
+
 
         let ground_handle = bodies.insert(Ground::new());
         let co = ColliderDesc::new(ground_shape)
@@ -93,7 +95,7 @@ impl CmcClient {
         let render_sender = bus_manager.render.new_sender();
 
         // let models = assets::load_models(location.origin()?, &window).await?;
-        assets::AssetLoadModel::mount_with_props(&loading_assets, AssetLoadProps{ bus_manager: bus_manager.clone(), server_root: location.origin()? });
+        // assets::AssetLoadModel::mount_with_props(&loading_assets, AssetLoadProps{ bus_manager: bus_manager.clone(), server_root: location.origin()? });
 
         let client = CmcClient {
             last_time: js_sys::Date::now(),
@@ -132,7 +134,7 @@ impl CmcClient {
                     self.colliders.insert(co);
                     log::info!("Added new object: {:?}", rb_handle);
                     self.handle_uid_lut.insert(rb_handle, uid.clone());
-                    self.render_sender.send(RenderMsg::NewObject(uid.clone(), "Cube_glb".to_string(), *position));
+                    self.render_sender.send(RenderMsg::NewObject(uid.clone(), "Ground_glb".to_string(), *position));
                 },
                 UiMsg::SetTarget(uid) => {
                     self.render_sender.send(RenderMsg::SetTarget(uid.clone()))

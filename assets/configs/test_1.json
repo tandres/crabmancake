@@ -1,0 +1,8 @@
+{
+    "name": "test_1",
+    "asset_type": {"gltf_model" : {
+        "gl_root": "test_1.gltf",
+        "prompt_files": ["test_1.bin"],
+        "deferrable_files": ["test_1_texture.jpg"]
+    }}
+}

@@ -1,8 +1,13 @@
 use crate::assets::Model;
 use crate::bus::{Bus, create_bus};
 use std::rc::Rc;
-use crate::uid::Uid;
+use crate::{assets::Asset, uid::Uid};
 use nphysics3d::nalgebra::Isometry3;
+
+pub enum FetchMsg {
+    NewAsset(Asset),
+    AssetUpdate(Asset),
+}
 
 pub enum RenderMsg {
     NewModel(Rc<Model>),
@@ -21,6 +26,7 @@ pub struct BusManager {
     id: u32,
     pub render: Bus<RenderMsg>,
     pub ui: Bus<UiMsg>,
+    pub fetch: Bus<FetchMsg>,
 }
 
 impl BusManager {
@@ -28,7 +34,8 @@ impl BusManager {
         BusManager {
             id,
             render : create_bus(),
-            ui : create_bus()
+            ui : create_bus(),
+            fetch: create_bus(),
         }
     }
 }

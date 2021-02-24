@@ -7,7 +7,28 @@ use web_sys::Element;
 use yew::services::fetch::{FetchService, FetchTask, Request, Response, Uri};
 use yew::{format::Nothing, prelude::*};
 
+const ASSET_DIR: &str = "assets";
+
+mod asset;
 mod asset_list;
+mod config;
+mod fetcher;
+
+pub use asset::Asset;
+pub use config::Config;
+pub use fetcher::Fetcher;
+
+pub async fn start_asset_fetch(bus_manager: Rc<BusManager>) {
+    let window = web_sys::window().unwrap();
+    let http_root = window.location().origin().unwrap();
+    let fetcher = Fetcher::new(bus_manager.fetch.new_sender());
+    let config_list: Vec<String> = asset_list::get_asset_config_list()
+        .iter()
+        .map(|s| format!("{}/{}/{}", http_root, ASSET_DIR, s))
+        .collect();
+    fetcher.add_asset_list(config_list);
+    fetcher.run().await;
+}
 
 pub const MODEL_DIR: &str = "models";
 
