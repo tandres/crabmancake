@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AssetType {
     #[serde(rename = "gltf_model")]
     GltfModel { gl_root: String, prompt_files: Vec<String>, deferrable_files: Vec<String> },
@@ -8,7 +8,7 @@ pub enum AssetType {
     GlbModel { gl_root: String },
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     pub name: String,
     pub asset_type: AssetType,
@@ -33,7 +33,7 @@ impl Config {
 
     }
 
-    fn get_prompt_files(&self) -> Vec<String> {
+    pub fn get_prompt_files(&self) -> Vec<String> {
         let mut list = Vec::new();
         match &self.asset_type {
             AssetType::GltfModel { gl_root, prompt_files, deferrable_files: _ } => {
@@ -47,7 +47,7 @@ impl Config {
         list
     }
 
-    fn get_deferable_files(&self) -> Vec<String> {
+    pub fn get_deferrable_files(&self) -> Vec<String> {
         let mut list = Vec::new();
         match &self.asset_type {
             AssetType::GltfModel { gl_root: _, prompt_files: _, deferrable_files } => {

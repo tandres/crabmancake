@@ -1,6 +1,6 @@
 #![recursion_limit="256"]
 use crate::scene::Scene;
-use crate::{assets::AssetLoadProps, bus::{Sender, Receiver}};
+use crate::{assets::AssetCache, bus::{Sender, Receiver}, bus_manager::AssetMsg};
 use crate::bus_manager::*;
 use log::trace;
 use wasm_bindgen::JsValue;
@@ -19,7 +19,6 @@ use nphysics3d::object::{
 };
 use nphysics3d::world::{DefaultGeometricalWorld, DefaultMechanicalWorld};
 use generational_arena::Index;
-use wasm_bindgen_futures::spawn_local;
 
 const GIT_VERSION: &str = git_version::git_version!();
 
@@ -38,6 +37,7 @@ mod uid;
 
 #[wasm_bindgen]
 pub struct CmcClient {
+    asset_cache: AssetCache,
     ui_receiver: Receiver<UiMsg>,
     render_sender: Sender<RenderMsg>,
     last_time: f64,
@@ -48,6 +48,7 @@ pub struct CmcClient {
     colliders: DefaultColliderSet<f32>,
     joint_constraints: DefaultJointConstraintSet<f32>,
     force_generators: DefaultForceGeneratorSet<f32>,
+    asset_receiver: Receiver<AssetMsg>,
 }
 
 #[wasm_bindgen]
@@ -56,10 +57,9 @@ impl CmcClient {
     pub async fn new() -> Result<CmcClient, JsValue> {
         let window = web_sys::window().expect("no global `window` exists");
         let document: Document = window.document().expect("should have a document on window");
-        let loading_assets = document.get_element_by_id("loadingassets").ok_or(CmcError::missing_val("loading"))?;
 
         let bus_manager = Rc::new(BusManager::new(0));
-        let fut = spawn_local(assets::start_asset_fetch(bus_manager.clone()));
+        let asset_receiver = bus_manager.asset.new_receiver();
         let canvas_side = document.get_element_by_id("canvasSide").ok_or(CmcError::missing_val("canvasSide"))?;
 
         let mechanical_world = DefaultMechanicalWorld::new(Vector3::new(0.0, -9.81, 0.0));
@@ -77,7 +77,8 @@ impl CmcClient {
             ground_width,
         )));
 
-
+        let asset_cache = AssetCache::new(bus_manager.clone());
+        assets::start_asset_fetch(&asset_cache);
         let ground_handle = bodies.insert(Ground::new());
         let co = ColliderDesc::new(ground_shape)
             .translation(Vector3::y() * -ground_thickness)
@@ -98,6 +99,7 @@ impl CmcClient {
         // assets::AssetLoadModel::mount_with_props(&loading_assets, AssetLoadProps{ bus_manager: bus_manager.clone(), server_root: location.origin()? });
 
         let client = CmcClient {
+            asset_cache: asset_cache,
             last_time: js_sys::Date::now(),
             ui_receiver: bus_manager.ui.new_receiver(),
             handle_uid_lut: HashMap::new(),
@@ -108,6 +110,7 @@ impl CmcClient {
             colliders,
             joint_constraints,
             force_generators,
+            asset_receiver,
         };
         Ok(client)
     }
@@ -116,6 +119,23 @@ impl CmcClient {
         let time = js_sys::Date::now();
         let delta_t =  time - self.last_time;
         self.last_time = time;
+        let asset_events = self.asset_receiver.read();
+        for event in asset_events {
+            match event.as_ref() {
+                AssetMsg::New(name, _config) => {
+                    log::info!("New Asset: {}", name);
+                },
+                AssetMsg::Update(name) => {
+                    log::info!("Asset Updated: {}", name);
+                },
+                AssetMsg::Complete(name) => {
+                    let config = self.asset_cache.get_asset_config(&name);
+                    let asset_info = self.asset_cache.get_asset_info(&name);
+                    log::info!("Asset Complete: {} {:?}", name, config);
+                    log::info!("Asset file info: {:?}", asset_info);
+                }
+            }
+        }
 
         let ui_events = self.ui_receiver.read();
         for event in ui_events {
