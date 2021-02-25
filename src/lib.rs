@@ -95,9 +95,6 @@ impl CmcClient {
         control_panel::ControlPanelModel::mount(&panel, control_panel::ControlPanelProps { bus_manager: bus_manager.clone()});
         let render_sender = bus_manager.render.new_sender();
 
-        // let models = assets::load_models(location.origin()?, &window).await?;
-        // assets::AssetLoadModel::mount_with_props(&loading_assets, AssetLoadProps{ bus_manager: bus_manager.clone(), server_root: location.origin()? });
-
         let client = CmcClient {
             asset_cache: asset_cache,
             last_time: js_sys::Date::now(),
