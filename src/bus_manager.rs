@@ -1,13 +1,13 @@
 use crate::assets::Model;
 use crate::bus::{Bus, create_bus};
 use std::rc::Rc;
-use crate::{assets::Config, uid::Uid};
+use crate::{assets::{Config, AssetCacheAccess}, uid::Uid};
 use nphysics3d::nalgebra::Isometry3;
 
 pub enum AssetMsg {
     New(String, Config),
-    Update(String),
-    Complete(String),
+    Update(String, AssetCacheAccess),
+    Complete(String, AssetCacheAccess),
 }
 
 pub enum RenderMsg {

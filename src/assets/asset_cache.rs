@@ -5,6 +5,8 @@ use reqwest::Client;
 use futures::{FutureExt, future::join_all};
 use wasm_bindgen_futures::spawn_local;
 
+pub type AssetCacheAccess = Arc<RwLock<HashMap<String, Asset>>>;
+
 pub struct AssetCache {
     //TJA todos: Web Storage, IndexDB, Expiration
     cache: Arc<RwLock<HashMap<String, Asset>>>,
@@ -36,14 +38,16 @@ impl AssetCache {
         }));
     }
 
-    pub fn get_asset_config(&self, name: &str) -> Option<Config> {
-        let cache = self.cache.read().unwrap();
-        cache.get(name).map(|a| a.get_config().clone())
-    }
-
-    pub fn get_asset_info(&self, name: &str) -> Option<String> {
-        let cache = self.cache.read().unwrap();
-        cache.get(name).map(|a| a.get_asset_info())
+    pub fn use_asset<F, O>(internal: &AssetCacheAccess, name: &str, function: F) -> Option<O>
+    where
+        F: FnOnce(&Asset) -> O,
+    {
+        let cache = internal.read().unwrap();
+        if let Some(asset) = cache.get(name) {
+            Some(function(asset))
+        } else {
+            None
+        }
     }
 }
 
@@ -51,7 +55,7 @@ fn build_url(url_root: &str, filename: &str) -> String {
     format!("{}/{}", url_root, filename)
 }
 
-async fn fetch_asset(url_root: String, filename: String, client: Client, sender: Sender<AssetMsg>, cache: Arc<RwLock<HashMap<String, Asset>>>) -> CmcResult<()> {
+async fn fetch_asset(url_root: String, filename: String, client: Client, sender: Sender<AssetMsg>, cache: AssetCacheAccess) -> CmcResult<()> {
     let config_url = build_url(&url_root, &filename);
     let config = fetch_config(&config_url, &client).await;
     log::info!("New config: {:?}", config);
@@ -78,14 +82,14 @@ async fn fetch_asset(url_root: String, filename: String, client: Client, sender:
             .into_iter()
             .collect::<Result<Vec<(String, Vec<u8>)>, CmcError>>()?;
         modify_asset(&cache, &asset_name, |asset| asset.add_files(prompt_files));
-        sender.send(AssetMsg::Update(asset_name.clone()));
+        sender.send(AssetMsg::Update(asset_name.clone(), cache.clone()));
         let deferrable_files: Vec<(String, Vec<u8>)> = join_all(deferrable_files)
             .await
             .into_iter()
             .collect::<Result<Vec<(String, Vec<u8>)>, CmcError>>()?;
         modify_asset(&cache, &asset_name, |asset| asset.add_files(deferrable_files));
         modify_asset(&cache, &asset_name, |asset| asset.set_complete());
-        sender.send(AssetMsg::Complete(asset_name));
+        sender.send(AssetMsg::Complete(asset_name, cache.clone()));
     }
     Ok(())
 }

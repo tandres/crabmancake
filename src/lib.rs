@@ -1,6 +1,6 @@
 #![recursion_limit="256"]
 use crate::scene::Scene;
-use crate::{assets::AssetCache, bus::{Sender, Receiver}, bus_manager::AssetMsg};
+use crate::{assets::AssetCache, bus::{Sender, Receiver}};
 use crate::bus_manager::*;
 use log::trace;
 use wasm_bindgen::JsValue;
@@ -34,6 +34,8 @@ mod shape;
 mod assets;
 mod light;
 mod uid;
+mod physics;
+mod graphics;
 
 #[wasm_bindgen]
 pub struct CmcClient {
@@ -48,7 +50,8 @@ pub struct CmcClient {
     colliders: DefaultColliderSet<f32>,
     joint_constraints: DefaultJointConstraintSet<f32>,
     force_generators: DefaultForceGeneratorSet<f32>,
-    asset_receiver: Receiver<AssetMsg>,
+    physics: physics::Physics,
+    graphics: graphics::Graphics,
 }
 
 #[wasm_bindgen]
@@ -57,11 +60,10 @@ impl CmcClient {
     pub async fn new() -> Result<CmcClient, JsValue> {
         let window = web_sys::window().expect("no global `window` exists");
         let document: Document = window.document().expect("should have a document on window");
-
         let bus_manager = Rc::new(BusManager::new(0));
-        let asset_receiver = bus_manager.asset.new_receiver();
+        let physics = physics::Physics::new(&bus_manager);
+        let graphics = graphics::Graphics::new(&bus_manager);
         let canvas_side = document.get_element_by_id("canvasSide").ok_or(CmcError::missing_val("canvasSide"))?;
-
         let mechanical_world = DefaultMechanicalWorld::new(Vector3::new(0.0, -9.81, 0.0));
         let geometrical_world = DefaultGeometricalWorld::new();
         let mut bodies = DefaultBodySet::new();
@@ -107,7 +109,8 @@ impl CmcClient {
             colliders,
             joint_constraints,
             force_generators,
-            asset_receiver,
+            physics,
+            graphics,
         };
         Ok(client)
     }
@@ -116,24 +119,8 @@ impl CmcClient {
         let time = js_sys::Date::now();
         let delta_t =  time - self.last_time;
         self.last_time = time;
-        let asset_events = self.asset_receiver.read();
-        for event in asset_events {
-            match event.as_ref() {
-                AssetMsg::New(name, _config) => {
-                    log::info!("New Asset: {}", name);
-                },
-                AssetMsg::Update(name) => {
-                    log::info!("Asset Updated: {}", name);
-                },
-                AssetMsg::Complete(name) => {
-                    let config = self.asset_cache.get_asset_config(&name);
-                    let asset_info = self.asset_cache.get_asset_info(&name);
-                    log::info!("Asset Complete: {} {:?}", name, config);
-                    log::info!("Asset file info: {:?}", asset_info);
-                }
-            }
-        }
-
+        self.physics.update(delta_t);
+        self.graphics.update(delta_t);
         let ui_events = self.ui_receiver.read();
         for event in ui_events {
             match event.as_ref() {

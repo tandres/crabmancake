@@ -10,7 +10,7 @@ mod config;
 
 pub use asset::Asset;
 pub use config::Config;
-pub use asset_cache::AssetCache;
+pub use asset_cache::{AssetCache, AssetCacheAccess};
 
 pub fn start_asset_fetch(asset_cache: &AssetCache) {
     let window = web_sys::window().unwrap();
