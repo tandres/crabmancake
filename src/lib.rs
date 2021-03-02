@@ -87,12 +87,12 @@ impl CmcClient {
             .build(BodyPartHandle(ground_handle, 0));
         colliders.insert(co);
 
-        let render_props = render_panel::RenderPanelProps {
-            panel: canvas_side.clone(),
-            bus_manager: bus_manager.clone(),
-            scene: Scene::new([-3., 2., 3.], 640., 480.),
-        };
-        render_panel::RenderPanelModel::mount(&canvas_side, render_props);
+        // let render_props = render_panel::RenderPanelProps {
+        //     panel: canvas_side.clone(),
+        //     bus_manager: bus_manager.clone(),
+        //     scene: Scene::new([-3., 2., 3.], 640., 480.),
+        // };
+        // render_panel::RenderPanelModel::mount(&canvas_side, render_props);
         let panel = document.get_element_by_id("controlPanel").ok_or(CmcError::missing_val("controlPanel"))?;
         control_panel::ControlPanelModel::mount(&panel, control_panel::ControlPanelProps { bus_manager: bus_manager.clone()});
         let render_sender = bus_manager.render.new_sender();

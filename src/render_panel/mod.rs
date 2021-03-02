@@ -152,7 +152,8 @@ impl Component for RenderPanelModel {
                             self.shapes.entry(String::from(uid)).and_modify(|e| {
                                 e.position = position.clone()
                             });
-                        }
+                        },
+                        _ => (),
                     }
                 }
                 self.render_gl(timestamp);

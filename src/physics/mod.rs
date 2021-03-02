@@ -29,8 +29,8 @@ impl Physics {
                 AssetMsg::Complete(name, access) => {
                     let config = AssetCache::use_asset(&access, &name, |a| a.get_config().clone());
                     let asset_info = AssetCache::use_asset(&access, &name, |a| a.get_asset_info());
-                    log::info!("Asset Complete: {} {:?}", name, config);
-                    log::info!("Asset file info: {:?}", asset_info);
+                    log::info!("Physics: Asset Complete: {} {:?}", name, config);
+                    log::info!("Physics: Asset file info: {:?}", asset_info);
                 }
             }
         }

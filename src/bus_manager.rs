@@ -15,6 +15,7 @@ pub enum RenderMsg {
     NewObject(Uid, String, [f32; 3]),
     SetTarget(Uid),
     ObjectUpdate(Uid, Isometry3<f32>),
+    Resize(u32, u32),
 }
 
 pub enum UiMsg {
