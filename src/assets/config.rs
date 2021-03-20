@@ -1,5 +1,17 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ShaderType {
+    NoRender,
+    Basic,
+}
+
+impl Default for ShaderType {
+    fn default() -> Self {
+        Self::NoRender
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AssetType {
     #[serde(rename = "gltf_model")]
@@ -12,6 +24,8 @@ pub enum AssetType {
 pub struct Config {
     pub name: String,
     pub asset_type: AssetType,
+    #[serde(default)]
+    pub render_type: ShaderType,
 }
 
 impl Config {

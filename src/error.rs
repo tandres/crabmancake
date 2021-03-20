@@ -32,6 +32,8 @@ pub enum CmcError {
     MissingVal(String),
     #[error("Conversion failed: {0}")]
     ConversionFail(String),
+    #[error("Not yet available")]
+    NotYet,
     #[error("Shader compilation failure: {log}")]
     ShaderCompile {
         log: String,

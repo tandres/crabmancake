@@ -1,7 +1,8 @@
 use super::Config;
 use std::collections::HashMap;
 
-enum AssetState {
+#[derive(Clone, PartialEq, Eq)]
+pub enum AssetState {
     Incomplete,
     Complete,
 }
@@ -22,6 +23,14 @@ impl Asset {
             state: AssetState::Incomplete,
             files: HashMap::new(),
         }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn is_complete(&self) -> bool {
+        self.state == AssetState::Complete
     }
 
     pub fn set_complete(&mut self) {
@@ -47,5 +56,9 @@ impl Asset {
             result.push(format!("{}: {} bytes", key, file.len()));
         }
         result.join("")
+    }
+
+    pub fn get_file<'a, S: AsRef<str>>(&'a self, name: S) -> Option<&'a Vec<u8>> {
+        self.files.get(name.as_ref())
     }
 }

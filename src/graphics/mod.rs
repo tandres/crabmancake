@@ -1,28 +1,39 @@
-use crate::{bus::Receiver, bus_manager::*, assets::AssetCache};
-use std::rc::Rc;
+use crate::{Uid, bus::Receiver, bus_manager::*, error::CmcResult};
+use std::{collections::BTreeMap, rc::Rc};
 
-mod graphics_object;
 mod canvas;
+mod renderer;
+mod object;
+mod camera;
+mod light;
 
-pub use graphics_object::GraphicsObject;
+use renderer::Renderer;
+use object::Object;
 
 pub struct Graphics {
     asset_rx: Receiver<AssetMsg>,
     render_rx: Receiver<RenderMsg>,
     canvas: canvas::Canvas,
+    renderer: renderer::Renderer,
+    objects: BTreeMap<Uid, Object>,
+    lights: Vec<Uid>,
 }
 
 impl Graphics {
-    pub fn new(bus_manager: &Rc<BusManager>) -> Self {
+    pub fn new(bus_manager: &Rc<BusManager>) -> CmcResult<Self> {
         let canvas = canvas::Canvas::new(
             "rustCanvas",
             "canvasSide",
             bus_manager.render.new_sender());
-        Self {
+        let renderer = Renderer::new(canvas.get_gl())?;
+        Ok( Self {
             asset_rx: bus_manager.asset.new_receiver(),
             render_rx: bus_manager.render.new_receiver(),
             canvas,
-        }
+            renderer,
+            objects: BTreeMap::new(),
+            lights: Vec::new(),
+        })
     }
 
     pub fn update(&mut self, _timestep: f64) {
@@ -32,26 +43,12 @@ impl Graphics {
     }
 
     fn render(&self) {
-        use web_sys::WebGlRenderingContext as GL;
-        self.canvas.get_gl().clear(GL::COLOR_BUFFER_BIT | GL::DEPTH_BUFFER_BIT);
+        self.renderer.render(self.canvas.get_gl(), &self.objects, &self.lights);
     }
 
     fn process_asset_msgs(&mut self) {
         for event in self.asset_rx.read() {
-            match event.as_ref() {
-                AssetMsg::New(name, _config) => {
-                    log::info!("New Asset: {}", name);
-                },
-                AssetMsg::Update(name, _access) => {
-                    log::info!("Asset Updated: {}", name);
-                },
-                AssetMsg::Complete(name, access) => {
-                    let config = AssetCache::use_asset(&access, &name, |a| a.get_config().clone());
-                    let asset_info = AssetCache::use_asset(&access, &name, |a| a.get_asset_info());
-                    log::info!("Graphics: Asset Complete: {} {:?}", name, config);
-                    log::info!("Graphics: Asset file info: {:?}", asset_info);
-                }
-            }
+            self.renderer.process_asset_msg(self.canvas.get_gl(), event.as_ref());
         }
     }
 

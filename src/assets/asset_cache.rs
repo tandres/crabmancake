@@ -129,3 +129,8 @@ where
         None => log::warn!("Failed to find key {}", key),
     }
 }
+
+fn remove_asset<S: AsRef<str>>(cache: &Arc<RwLock<HashMap<String, Asset>>>, key: S) -> Option<Asset> {
+    let mut cache = cache.write().unwrap();
+    cache.remove(key.as_ref())
+}

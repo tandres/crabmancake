@@ -1,5 +1,4 @@
 #![recursion_limit="256"]
-use crate::scene::Scene;
 use crate::{assets::AssetCache, bus::{Sender, Receiver}};
 use crate::bus_manager::*;
 use log::trace;
@@ -9,7 +8,6 @@ use web_sys::Document;
 use std::rc::Rc;
 use error::CmcError;
 use std::collections::HashMap;
-use crate::uid::Uid;
 use nphysics3d::nalgebra::Vector3;
 use nphysics3d::ncollide3d::shape::{Cuboid, ShapeHandle};
 use nphysics3d::force_generator::DefaultForceGeneratorSet;
@@ -23,19 +21,16 @@ use generational_arena::Index;
 const GIT_VERSION: &str = git_version::git_version!();
 
 mod control_panel;
-mod render_panel;
 mod bus;
 mod bus_manager;
 mod key_state;
 mod error;
-mod render;
-mod scene;
-mod shape;
 mod assets;
-mod light;
 mod uid;
 mod physics;
 mod graphics;
+
+pub use uid::Uid;
 
 #[wasm_bindgen]
 pub struct CmcClient {
@@ -62,7 +57,7 @@ impl CmcClient {
         let document: Document = window.document().expect("should have a document on window");
         let bus_manager = Rc::new(BusManager::new(0));
         let physics = physics::Physics::new(&bus_manager);
-        let graphics = graphics::Graphics::new(&bus_manager);
+        let graphics = graphics::Graphics::new(&bus_manager)?;
         let canvas_side = document.get_element_by_id("canvasSide").ok_or(CmcError::missing_val("canvasSide"))?;
         let mechanical_world = DefaultMechanicalWorld::new(Vector3::new(0.0, -9.81, 0.0));
         let geometrical_world = DefaultGeometricalWorld::new();
@@ -87,12 +82,6 @@ impl CmcClient {
             .build(BodyPartHandle(ground_handle, 0));
         colliders.insert(co);
 
-        // let render_props = render_panel::RenderPanelProps {
-        //     panel: canvas_side.clone(),
-        //     bus_manager: bus_manager.clone(),
-        //     scene: Scene::new([-3., 2., 3.], 640., 480.),
-        // };
-        // render_panel::RenderPanelModel::mount(&canvas_side, render_props);
         let panel = document.get_element_by_id("controlPanel").ok_or(CmcError::missing_val("controlPanel"))?;
         control_panel::ControlPanelModel::mount(&panel, control_panel::ControlPanelProps { bus_manager: bus_manager.clone()});
         let render_sender = bus_manager.render.new_sender();

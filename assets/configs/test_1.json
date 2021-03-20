@@ -1,8 +1,8 @@
 {
-    "name": "test_1",
+    "name": "test_3",
     "asset_type": {"gltf_model" : {
-        "gl_root": "test_1.gltf",
-        "prompt_files": ["test_1.bin"],
-        "deferrable_files": ["test_1_texture.jpg"]
+        "gl_root": "test_3.gltf",
+        "prompt_files": ["test_3.bin"],
+        "deferrable_files": ["test_3_cube_texture.jpg", "test_3_cone_texture.jpg"]
     }}
 }

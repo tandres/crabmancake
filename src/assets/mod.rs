@@ -9,7 +9,7 @@ mod asset_list;
 mod config;
 
 pub use asset::Asset;
-pub use config::Config;
+pub use config::{Config, ShaderType, AssetType};
 pub use asset_cache::{AssetCache, AssetCacheAccess};
 
 pub fn start_asset_fetch(asset_cache: &AssetCache) {

@@ -5,7 +5,7 @@ lazy_static! {
    static ref LAST_UID: Mutex<u32> = Mutex::new(1);
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Eq, PartialOrd, Ord)]
 pub struct Uid {
     inner: u32
 }
@@ -62,6 +62,4 @@ pub fn get_new_uid() -> Uid {
     *last += 1;
     res
 }
-
-
 
